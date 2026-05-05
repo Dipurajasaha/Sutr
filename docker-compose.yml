@@ -1,0 +1,33 @@
+version: '3.8'
+
+x-base-service: &base-service
+  build:
+    context: ./backend
+    dockerfile: ./services/${SERVICE_NAME}/Dockerfile
+  restart: unless-stopped
+  env_file:
+    - .env
+  networks:
+    - sutr_network
+
+networks:
+  sutr_network:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sutr_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sutr_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sutr_password}
+      POSTGRES_DB: ${POSTGRES_DB:-sutr_db}
+    ports:
+      - "5432:5432"
+    networks:
+      - sutr_network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
