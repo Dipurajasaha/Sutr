@@ -10,6 +10,6 @@ class ProcessRequest(BaseModel):
 # -- schema for the processing completion response --
 class ProcessResponse(BaseModel):
     status: str
-    file_id: str
+    file_id: UUID
     total_chunks: int
     message: str
