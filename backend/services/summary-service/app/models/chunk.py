@@ -14,5 +14,5 @@ class TextChunk(Base):
     file_id = Column(UUID(as_uuid=True), index=True, nullable=False)
     chunk_index = Column(Integer, nullable=False)
     text = Column(String, nullable=False)
-    start_time = Column(Float, nullable=False)
-    end_time = Column(Float, nullable=False)
+    start_time = Column(Float, nullable=True)
+    end_time = Column(Float, nullable=True)

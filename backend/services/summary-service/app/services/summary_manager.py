@@ -24,7 +24,7 @@ async def generate_summary(db: AsyncSession, file_id: str, summary_type: str) ->
     chunks = result.scalars().all()
 
     if not chunks:
-        return "No content found to summerize."
+        return "No content found to summarize."
     
     # -- 2. aggregate text chunks --
     full_text = " ".join(chunks)

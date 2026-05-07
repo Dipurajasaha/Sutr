@@ -61,6 +61,28 @@ Every microservice in the `backend/services/` directory strictly follows this Do
 - **Key Endpoints:**
   - `POST /api/v1/chat/query/`: Accepts `session_id`, `query`, and `file_id`. Returns the AI's answer along with source chunk references.
 
+### 5. Summary Service (Port: 8005)
+- **Directory:** `backend/services/summary-service/`
+- **Responsibility:** Aggregates document content and generates multi-level summaries (short and detailed).
+- **Key Features:**
+  - **Chunk Aggregation:** Efficiently collects and orders all `TextChunk` records associated with a `file_id` to build a comprehensive context for the LLM.
+  - **Intelligent Summarization:** Uses the Longcat LLM with specialized prompts to synthesize content into concise paragraphs or detailed bullet points.
+  - **Strict Isolation:** Has its own internal `TextChunk` model and database core so the service remains independently runnable without dependencies on other service logic.
+- **Tech Stack:** FastAPI, Longcat API (LongCat-Flash-Chat), SQLAlchemy (Async).
+- **Key Endpoints:**
+  - `POST /api/v1/summary/generate/`: Accepts a `file_id` and a `summary_type` (`short` or `detailed`). Returns the synthesized summary of the document or media file.
+
+### 6. Media Timestamp Service (Port: 8006)
+- **Directory:** `backend/services/media-service/`
+- **Responsibility:** Maps AI-retrieved text chunks back to their original playable audio/video segments.
+- **Key Features:**
+    - **Timestamp Mapping:** Retrieves specific `start_time` and `end_time` values for given `chunk_id`s generated during the RAG pipeline.
+    - **Segment Calculation:** Formats the extracted data into playable segments to allow frontend UI "Play" buttons to jump to the exact moment a topic is discussed.
+    - **Strict Isolation:** Uses an isolated, read-only definition of the database models (`FileMetadata` and `TextChunk`) to fetch required paths and timestamps without breaking service boundaries.
+- **Tech Stack:** FastAPI, SQLAlchemy (Async).
+- **Key Endpoints:**
+    - `GET /api/v1/media/playback/{file_id}`: Accepts a list of `chunk_id`s as query parameters and returns the physical file path along with the playable timestamp segments.
+    
 ---
 
 ## 🛠️ How to Run Locally
