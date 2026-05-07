@@ -10,6 +10,7 @@ sys.modules['faiss'] = MagicMock()
 import pytest
 import pytest_asyncio
 import asyncio
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.core.database import Base, get_db
 from app.main import app
@@ -66,5 +67,5 @@ async def cleanup_db_between_tests():
     # -- delete all data from each table after test --
     async with TestingSessionLocal() as session:
         for table in reversed(Base.metadata.sorted_tables):
-            await session.execute(f"DELETE FROM {table.name}")
+            await session.execute(text(f"DELETE FROM {table.name}"))
         await session.commit()
