@@ -32,7 +32,7 @@ Every microservice in the `backend/services/` directory strictly follows this Do
 ### 2. Processing Service (Port: 8002)
 - **Directory:** `backend/services/processing-service/`
 - **Responsibility:** Extracts text from files and chunks it for embedding.
-- **Engines:** 
+- **Engines:**
   - **PDFs:** `PyMuPDF` for fast text extraction.
   - **Media:** Local `Whisper (small)` model for audio/video transcription with native timestamp extraction.
   - **Chunking:** `langchain-text-splitters` (1000 chars, 150 overlap).
@@ -48,6 +48,18 @@ Every microservice in the `backend/services/` directory strictly follows this Do
 - **Key Endpoints:**
   - `POST /api/v1/vectors/index/`: Converts text chunks to vectors and stores them in FAISS and PostgreSQL.
   - `POST /api/v1/vectors/search/`: Takes a user query, embeds it, and retrieves the Top-K most relevant document/media chunks.
+
+### 4. Chat Service (Port: 8004)
+- **Directory:** `backend/services/chat-service/`
+- **Responsibility:** Orchestrates a smart, agentic RAG (Retrieval-Augmented Generation) pipeline with conversational memory.
+- **Key Features:**
+  - **LangChain Agentic Router:** Uses an LLM agent to intelligently decide whether a user's query requires searching the uploaded document or can be answered using context.
+  - **Volatile Conversational Memory:** Maintains a rolling window of the last 10 conversation exchanges (20 messages) per session.
+  - **Stateless & Secure:** History is stored in-memory and is automatically cleared when the application session ends or the server restarts.
+  - **Tool-Calling Integration:** Communicates with the Vector Service via a specialized `search_document` tool to retrieve relevant context only when necessary.
+- **Tech Stack:** LangChain, Longcat API (LongCat-Flash-Chat), HTTPX.
+- **Key Endpoints:**
+  - `POST /api/v1/chat/query/`: Accepts `session_id`, `query`, and `file_id`. Returns the AI's answer along with source chunk references.
 
 ---
 

@@ -25,7 +25,7 @@ def get_chat_history(session_id: str) -> list:
 # -- adds the new exchange and enforces the 10-conversation (20 messages) limit --
 ##########################################################################################
 def update_chat_history(session_id: str, human_text: str, ai_text: str):
-    history = get_chat_history(session_id)
+    history = get_chat_history(session_id)      # --> get the current history (initializes if not exists)
     history.append(HumanMessage(content=human_text))
     history.append(AIMessage(content=ai_text))
 
