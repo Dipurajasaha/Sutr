@@ -57,9 +57,10 @@ jobs:
         env:
           # -- point the tests to the temporary CI database --
           DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@localhost:5432/sutr_test_db
-          PYTHONPATH: backend
           LONGCAT_API_KEY: test-key
         run: |
           cd backend/services/${{ matrix.service }}
+          # -- set PYTHONPATH to current dir so 'app' module is importable --
+          export PYTHONPATH=.
           # -- enforce the 95% coverage requirement --
           pytest tests/ --cov=app --cov-report=term-missing --cov-fail-under=95
