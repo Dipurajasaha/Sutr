@@ -1,3 +1,4 @@
+import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -7,7 +8,7 @@ from app.schemas.media import TimestampSegment
 ##########################################################################################
 # -- maps chunk IDs back to their timestamps and joins with the file path --
 ##########################################################################################
-async def get_segments_for_chunks(db: AsyncSession, file_id: str, chunk_ids: list[str]):
+async def get_segments_for_chunks(db: AsyncSession, file_id: uuid.UUID, chunk_ids: list[uuid.UUID]):
     # -- 1. Fetch file path --
     file_result = await db.execute(select(FileMetadata).where(FileMetadata.id == file_id))
     file_data = file_result.scalar_one_or_none()
@@ -17,7 +18,7 @@ async def get_segments_for_chunks(db: AsyncSession, file_id: str, chunk_ids: lis
 
     # -- 2. Fetch specific chunks to get their start/end times --
     chunk_result = await db.execute(
-        select(TextChunk).where(TextChunk.id.in_(chunk_ids))
+        select(TextChunk).where(TextChunk.id.in_(chunk_ids)).order_by(TextChunk.start_time)
     )
     chunks = chunk_result.scalars().all()
 

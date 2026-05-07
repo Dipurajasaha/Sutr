@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
 from app.core.database import get_db
 from app.schemas.media import MediaPlaybackResponse
 from app.services.playback_manager import get_segments_for_chunks
@@ -14,7 +15,9 @@ async def get_playback_info(
     db: AsyncSession = Depends(get_db)
 ):
     # -- retrieve path and timestamp segments --
-    file_path, segments = await get_segments_for_chunks(db, file_id, chunk_ids)
+    file_uuid = uuid.UUID(file_id)
+    chunk_uuid_list = [uuid.UUID(chunk_id) for chunk_id in chunk_ids]
+    file_path, segments = await get_segments_for_chunks(db, file_uuid, chunk_uuid_list)
     
     if file_path is None:
         raise HTTPException(status_code=404, detail="File metadata not found")

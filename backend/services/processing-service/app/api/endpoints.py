@@ -50,6 +50,8 @@ async def process_file(request: ProcessRequest, db: AsyncSession = Depends(get_d
             total_chunks = len(db_chunks),
             message = "File processed and chunked successfully"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

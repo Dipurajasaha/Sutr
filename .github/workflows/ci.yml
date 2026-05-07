@@ -1,0 +1,62 @@
+name: Sutr Microservices CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-services:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # -- automatically test each isolated service --
+        service: 
+          - api-gateway
+          - upload-service
+          - processing-service
+          - vector-service
+          - chat-service
+          - summary-service
+          - media-service
+
+    # -- spin up a temporary database for the tests to use --
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: sutr_admin
+          POSTGRES_PASSWORD: sutr_password
+          POSTGRES_DB: sutr_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/services/${{ matrix.service }}/requirements.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
+
+      - name: Run Pytest with Coverage
+        env:
+          # -- point the tests to the temporary CI database --
+          DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@localhost:5432/sutr_test_db
+        run: |
+          cd backend/services/${{ matrix.service }}
+          # -- enforce the 95% coverage requirement --
+          pytest tests/ --cov=app --cov-report=term-missing --cov-fail-under=95

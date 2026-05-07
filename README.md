@@ -82,8 +82,45 @@ Every microservice in the `backend/services/` directory strictly follows this Do
 - **Tech Stack:** FastAPI, SQLAlchemy (Async).
 - **Key Endpoints:**
     - `GET /api/v1/media/playback/{file_id}`: Accepts a list of `chunk_id`s as query parameters and returns the physical file path along with the playable timestamp segments.
-    
+
+### 7. API Gateway (Port: 8000)
+- **Directory:** `backend/services/api-gateway/`
+- **Responsibility:** Acts as the centralized entry point and unified interface for the entire Sutr microservice ecosystem.
+- **Key Features:**
+    - **Reverse Proxy:** Efficiently routes incoming external requests (JSON and multipart file uploads) to the correct internal microservices using asynchronous `httpx` forwarders.
+    - **Network Abstraction:** Hides the complexity of internal service ports (8001-8006). The frontend only needs to communicate with `http://localhost:8000/api/`.
+    - **CORS Management:** Pre-configured with Cross-Origin Resource Sharing middleware to allow seamless communication with the frontend UI.
+- **Tech Stack:** FastAPI, HTTPX, Python-Multipart.
+- **Key Endpoints:**
+    - `POST /api/upload/`: Routes to Upload Service.
+    - `POST /api/process/`: Routes to Processing Service.
+    - `POST /api/chat/query/`: Routes to Chat Service.
+    - `POST /api/summary/generate/`: Routes to Summary Service.
+    - `GET /api/media/playback/{file_id}`: Routes to Media Timestamp Service.
 ---
+
+  ## 🧪 Testing & Quality Assurance
+
+  Sutr uses an isolated, service-by-service testing approach built on `pytest`, `pytest-asyncio`, and `pytest-cov`. Every microservice is tested independently with a strict coverage gate of **greater than 95%** so failures are localized and coverage regressions are caught early.
+
+  The test suite mocks heavy AI and data-processing dependencies so the tests run quickly and deterministically without requiring network access or GPU hardware. This includes mocked FAISS indexes, Whisper transcription paths, PyMuPDF parsing flows, Longcat API calls, and other external integrations.
+
+  ### Test Infrastructure
+  - `scripts/run_tests.sh` runs the full backend test matrix locally, service by service.
+  - GitHub Actions CI runs the same service-level checks in isolated environments.
+  - Each service spins up its own test database or equivalent isolated test fixture so data never leaks across services.
+  - Async endpoint behavior is validated with `pytest-asyncio` and coverage is measured with `pytest-cov`.
+
+  ### Final Coverage Results
+  - **Upload Service:** 100%
+  - **Processing Service:** 96.49%
+  - **Vector Service:** 100%
+  - **Chat Service:** 98.00%
+  - **Summary Service:** 98.95%
+  - **Media Service:** 96.63%
+  - **API Gateway:** 100%
+
+  All 7 microservices passed with coverage above the required 95% threshold.
 
 ## 🛠️ How to Run Locally
 

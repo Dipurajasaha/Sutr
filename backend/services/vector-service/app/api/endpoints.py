@@ -5,7 +5,7 @@ from sqlalchemy.future import select
 from app.core.database import get_db
 from app.schemas.vector import IndexRequest, SearchRequest, SearchResult
 from app.models.vector_metadata import VectorMetadata
-from app.services.embedding_sevice import vector_store
+from app.services.embedding_service import vector_store
 
 router = APIRouter()
 
