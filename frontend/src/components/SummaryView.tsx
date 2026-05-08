@@ -3,6 +3,7 @@ import axios from 'axios'
 import { FileText, AlertCircle, Zap } from 'lucide-react'
 import { apiClient } from '../api/client'
 import type { FileSystemItem } from './types'
+import MarkdownBlock from './MarkdownBlock'
 
 type SummaryViewProps = {
   activeFile: FileSystemItem | null
@@ -126,7 +127,7 @@ export default function SummaryView({ activeFile }: SummaryViewProps) {
             </div>
           ) : summaryData ? (
             <div className="prose prose-invert max-w-none">
-              <div className="whitespace-pre-wrap text-base leading-relaxed text-zinc-300">{summaryData}</div>
+              <MarkdownBlock className="text-base leading-relaxed text-zinc-300" content={summaryData} />
             </div>
           ) : (
             <div className="py-8 text-center text-zinc-500">

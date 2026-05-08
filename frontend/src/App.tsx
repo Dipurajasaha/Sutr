@@ -22,11 +22,73 @@ type BackendFile = {
   created_at: string
 }
 
+function removeItemRecursive(items: FileSystemItem[], targetId: string): FileSystemItem[] {
+  const next: FileSystemItem[] = []
+
+  for (const item of items) {
+    if (item.id === targetId) {
+      continue
+    }
+
+    if (item.type === 'folder' && item.children) {
+      next.push({ ...item, children: removeItemRecursive(item.children, targetId) })
+    } else {
+      next.push(item)
+    }
+  }
+
+  return next
+}
+
+function renameItemRecursive(items: FileSystemItem[], targetId: string, newName: string): FileSystemItem[] {
+  return items.map((item) => {
+    if (item.id === targetId) {
+      return { ...item, name: newName }
+    }
+
+    if (item.type === 'folder' && item.children) {
+      return { ...item, children: renameItemRecursive(item.children, targetId, newName) }
+    }
+
+    return item
+  })
+}
+
+function hasFolderRecursive(items: FileSystemItem[], folderId: string): boolean {
+  for (const item of items) {
+    if (item.id === folderId && item.type === 'folder') {
+      return true
+    }
+
+    if (item.type === 'folder' && item.children && hasFolderRecursive(item.children, folderId)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function insertFileIntoFolderRecursive(items: FileSystemItem[], folderId: string, newFile: FileSystemItem): FileSystemItem[] {
+  return items.map((item) => {
+    if (item.id === folderId && item.type === 'folder') {
+      const children = item.children ?? []
+      return { ...item, isOpen: true, children: [newFile, ...children] }
+    }
+
+    if (item.type === 'folder' && item.children) {
+      return { ...item, children: insertFileIntoFolderRecursive(item.children, folderId, newFile) }
+    }
+
+    return item
+  })
+}
+
 export default function App() {
   const [activeFile, setActiveFile] = useState<FileSystemItem | null>(null)
   const [tree, setTree] = useState<FileSystemItem[]>([])
   const [isLoadingFiles, setIsLoadingFiles] = useState(true)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+  const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | null>(null)
   const [mode, setMode] = useState<'chat' | 'summary'>('chat')
   const [currentSeekTime, setCurrentSeekTime] = useState<number>(0)
 
@@ -66,10 +128,22 @@ export default function App() {
       name: uploadedFile.filename,
       type: 'file',
       fileType: mapBackendFileType(uploadedFile.file_type),
+      filePath: uploadedFile.file_path,
     }
 
-    setTree((prev) => [newFile, ...prev])
+    setTree((prev) => {
+      if (!uploadTargetFolderId) {
+        return [newFile, ...prev]
+      }
+
+      if (!hasFolderRecursive(prev, uploadTargetFolderId)) {
+        return [newFile, ...prev]
+      }
+
+      return insertFileIntoFolderRecursive(prev, uploadTargetFolderId, newFile)
+    })
     setActiveFile(newFile)
+    setUploadTargetFolderId(null)
     setIsUploadModalOpen(false)
   }
 
@@ -82,7 +156,7 @@ export default function App() {
   const handleDeleteFile = async (fileId: string) => {
     try {
       await apiClient.delete(`/api/files/${fileId}`)
-      setTree((prev) => prev.filter((item) => item.id !== fileId))
+      setTree((prev) => removeItemRecursive(prev, fileId))
       if (activeFile?.id === fileId) {
         setActiveFile(null)
       }
@@ -97,13 +171,7 @@ export default function App() {
       const response = await apiClient.patch<BackendFile>(`/api/files/${fileId}`, {
         filename: newName,
       })
-      setTree((prev) =>
-        prev.map((item) =>
-          item.id === fileId
-            ? { ...item, name: response.data.filename }
-            : item
-        )
-      )
+      setTree((prev) => renameItemRecursive(prev, fileId, response.data.filename))
       if (activeFile?.id === fileId) {
         setActiveFile((prev) => (prev ? { ...prev, name: response.data.filename } : null))
       }
@@ -135,7 +203,10 @@ export default function App() {
           tree={tree}
           setTree={setTree}
           onSelectFile={setActiveFile}
-          onOpenUpload={() => setIsUploadModalOpen(true)}
+          onOpenUpload={(targetFolderId?: string) => {
+            setUploadTargetFolderId(targetFolderId ?? null)
+            setIsUploadModalOpen(true)
+          }}
           onDeleteFile={handleDeleteFile}
           onRenameFile={handleRenameFile}
           isLoadingFiles={isLoadingFiles}
@@ -154,7 +225,10 @@ export default function App() {
 
       <UploadModal
         isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
+        onClose={() => {
+          setUploadTargetFolderId(null)
+          setIsUploadModalOpen(false)
+        }}
         onUploadSuccess={handleUploadSuccess}
       />
     </div>

@@ -26,7 +26,7 @@ app.add_middleware(
 
 
 ##########################################################################
-# Initializes the database tables on startup
+# -- initializes the database tables on startup --
 ##########################################################################
 @app.on_event("startup")
 async def startup_event():
@@ -38,7 +38,7 @@ async def startup_event():
 
 app.include_router(upload_router, prefix="/api/v1", tags=["Upload"])
 
-# -- Mount static files for media playback --
+# -- mount static files for media playback --
 uploads_dir = Path(settings.UPLOAD_DIR).resolve()
 uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
@@ -46,5 +46,4 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 # -- basic health check endpoint --
 @app.get("/health", tags=["System"])
 async def health_check():
-    """Basic health check endpoint."""
     return {"status": "healthy", "service": "upload-service"}

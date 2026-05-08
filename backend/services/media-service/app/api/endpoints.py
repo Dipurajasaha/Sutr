@@ -8,13 +8,16 @@ from typing import List
 
 router = APIRouter()
 
+##########################################################################
+# Get Playback Info
+##########################################################################
 @router.get("/playback/{file_id}", response_model=MediaPlaybackResponse)
 async def get_playback_info(
     file_id: str, 
     chunk_ids: List[str] = Query(...), 
     db: AsyncSession = Depends(get_db)
 ):
-    # -- retrieve path and timestamp segments --
+    # -- map chunk IDs to playable segments with timestamps --
     file_uuid = uuid.UUID(file_id)
     chunk_uuid_list = [uuid.UUID(chunk_id) for chunk_id in chunk_ids]
     file_path, segments = await get_segments_for_chunks(db, file_uuid, chunk_uuid_list)

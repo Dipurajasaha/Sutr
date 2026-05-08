@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FolderPlus, UploadCloud, Loader } from 'lucide-react'
 import FolderNode from './FolderNode'
 import FileNode from './FileNode'
@@ -11,7 +11,7 @@ type SidebarProps = {
   tree: FileSystemItem[]
   setTree: Dispatch<SetStateAction<FileSystemItem[]>>
   onSelectFile: (item: FileSystemItem) => void
-  onOpenUpload: () => void
+  onOpenUpload: (targetFolderId?: string) => void
   onDeleteFile: (fileId: string) => Promise<void>
   onRenameFile: (fileId: string, newName: string) => Promise<void>
   isLoadingFiles?: boolean
@@ -31,6 +31,120 @@ export default function Sidebar({
     setTree((prev) => toggleFolderRecursive(prev, id))
   }
 
+  const findItemByIdRecursive = (items: FileSystemItem[], targetId: string): FileSystemItem | null => {
+    for (const item of items) {
+      if (item.id === targetId) {
+        return item
+      }
+      if (item.type === 'folder' && item.children) {
+        const found = findItemByIdRecursive(item.children, targetId)
+        if (found) {
+          return found
+        }
+      }
+    }
+    return null
+  }
+
+  const renameItemRecursive = (items: FileSystemItem[], targetId: string, newName: string): FileSystemItem[] => {
+    return items.map((item) => {
+      if (item.id === targetId) {
+        return { ...item, name: newName }
+      }
+      if (item.type === 'folder' && item.children) {
+        return { ...item, children: renameItemRecursive(item.children, targetId, newName) }
+      }
+      return item
+    })
+  }
+
+  const deleteItemRecursive = (items: FileSystemItem[], targetId: string): FileSystemItem[] => {
+    const next: FileSystemItem[] = []
+    for (const item of items) {
+      if (item.id === targetId) {
+        continue
+      }
+
+      if (item.type === 'folder' && item.children) {
+        next.push({ ...item, children: deleteItemRecursive(item.children, targetId) })
+      } else {
+        next.push(item)
+      }
+    }
+    return next
+  }
+
+  const removeFileRecursive = (
+    items: FileSystemItem[],
+    targetId: string,
+  ): { nextItems: FileSystemItem[]; removedFile: FileSystemItem | null } => {
+    const nextItems: FileSystemItem[] = []
+    let removedFile: FileSystemItem | null = null
+
+    for (const item of items) {
+      if (item.id === targetId && item.type === 'file') {
+        removedFile = item
+        continue
+      }
+
+      if (item.type === 'folder' && item.children) {
+        const result = removeFileRecursive(item.children, targetId)
+        if (result.removedFile) {
+          removedFile = result.removedFile
+        }
+        nextItems.push({ ...item, children: result.nextItems })
+      } else {
+        nextItems.push(item)
+      }
+    }
+
+    return { nextItems, removedFile }
+  }
+
+  const insertFileIntoFolderRecursive = (
+    items: FileSystemItem[],
+    folderId: string,
+    fileItem: FileSystemItem,
+  ): FileSystemItem[] => {
+    return items.map((item) => {
+      if (item.id === folderId && item.type === 'folder') {
+        const children = item.children ?? []
+        return { ...item, isOpen: true, children: [fileItem, ...children] }
+      }
+
+      if (item.type === 'folder' && item.children) {
+        return {
+          ...item,
+          children: insertFileIntoFolderRecursive(item.children, folderId, fileItem),
+        }
+      }
+
+      return item
+    })
+  }
+
+  const insertFolderIntoFolderRecursive = (
+    items: FileSystemItem[],
+    folderId: string,
+    newFolder: FileSystemItem,
+  ): FileSystemItem[] => {
+    return items.map((item) => {
+      if (item.id === folderId && item.type === 'folder') {
+        const children = item.children ?? []
+        return { ...item, isOpen: true, children: [newFolder, ...children] }
+      }
+
+      if (item.type === 'folder' && item.children) {
+        return {
+          ...item,
+          children: insertFolderIntoFolderRecursive(item.children, folderId, newFolder),
+        }
+      }
+
+      return item
+    })
+  }
+
   const toggleFolderRecursive = (items: FileSystemItem[], targetId: string): FileSystemItem[] => {
     return items.map((item) => {
       if (item.id === targetId && item.type === 'folder') {
@@ -46,6 +160,13 @@ export default function Sidebar({
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null)
   const [renameTargetName, setRenameTargetName] = useState<string>('')
+  const [createFolderOpen, setCreateFolderOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [deleteTargetName, setDeleteTargetName] = useState<string>('')
+  const [deleteTargetType, setDeleteTargetType] = useState<'file' | 'folder' | null>(null)
+  const [uiMessage, setUiMessage] = useState<string>('')
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
 
   const renameItem = (id: string, currentName: string) => {
     setRenameTargetId(id)
@@ -53,27 +174,126 @@ export default function Sidebar({
     setRenameOpen(true)
   }
 
-  const deleteItem = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this item?')) {
-      try {
-        await onDeleteFile(id)
-      } catch (error) {
-        window.alert('Failed to delete file. Please try again.')
-        console.error('Delete error:', error)
+  const selectFolder = (folderId: string) => {
+    setSelectedFolderId(folderId)
+    setUiMessage('')
+  }
+
+  const deleteItem = (id: string) => {
+    const target = findItemByIdRecursive(tree, id)
+    if (!target) {
+      return
+    }
+
+    setDeleteTargetId(target.id)
+    setDeleteTargetName(target.name)
+    setDeleteTargetType(target.type)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDeleteItem = async () => {
+    if (!deleteTargetId || !deleteTargetType) {
+      return
+    }
+
+    try {
+      if (deleteTargetType === 'folder') {
+        setTree((prev) => deleteItemRecursive(prev, deleteTargetId))
+        if (selectedFolderId === deleteTargetId) {
+          setSelectedFolderId(null)
+        }
+        return
       }
+
+      await onDeleteFile(deleteTargetId)
+    } catch (error) {
+      setUiMessage('Failed to delete item. Please try again.')
+      console.error('Delete error:', error)
+      throw error
     }
   }
 
-  const handleConfirmRename = async (newName: string) => {
+  const handleConfirmRename = async (newName?: string) => {
+    const normalizedName = (newName ?? '').trim()
+    if (!normalizedName) {
+      return
+    }
+
     if (!renameTargetId) return
     try {
-      await onRenameFile(renameTargetId, newName)
+      const target = findItemByIdRecursive(tree, renameTargetId)
+      if (!target) {
+        return
+      }
+
+      if (target.type === 'folder') {
+        setTree((prev) => renameItemRecursive(prev, renameTargetId, normalizedName))
+        return
+      }
+
+      await onRenameFile(renameTargetId, normalizedName)
     } catch (error) {
-      window.alert('Failed to rename file. Please try again.')
+      setUiMessage('Failed to rename item. Please try again.')
       console.error('Rename error:', error)
       throw error
     }
   }
+
+  const handleCreateFolder = async (folderName?: string) => {
+    const name = (folderName ?? '').trim()
+    if (!name) {
+      return
+    }
+
+    const newFolder: FileSystemItem = {
+      id: `folder-${crypto.randomUUID()}`,
+      name,
+      type: 'folder',
+      isOpen: true,
+      children: [],
+    }
+
+    setTree((prev) => {
+      if (!selectedFolderId) {
+        return [newFolder, ...prev]
+      }
+      return insertFolderIntoFolderRecursive(prev, selectedFolderId, newFolder)
+    })
+  }
+
+  const moveSelectedFileIntoFolder = (folderId: string) => {
+    if (!activeFileId) {
+      setUiMessage('Select a file first, then choose a destination folder.')
+      return
+    }
+
+    const selected = findItemByIdRecursive(tree, activeFileId)
+    if (!selected || selected.type !== 'file') {
+      setUiMessage('Select a file first, then choose a destination folder.')
+      return
+    }
+
+    setTree((prev) => {
+      const removal = removeFileRecursive(prev, activeFileId)
+      if (!removal.removedFile) {
+        return prev
+      }
+
+      return insertFileIntoFolderRecursive(removal.nextItems, folderId, removal.removedFile)
+    })
+  }
+
+  useEffect(() => {
+    if (!selectedFolderId) {
+      return
+    }
+
+    if (!findItemByIdRecursive(tree, selectedFolderId)) {
+      setSelectedFolderId(null)
+    }
+  }, [tree, selectedFolderId])
+
+  const selectedFolder = selectedFolderId ? findItemByIdRecursive(tree, selectedFolderId) : null
 
   const renderTree = (items: FileSystemItem[], depth: number = 0) => {
     return items.map((item) => {
@@ -83,7 +303,11 @@ export default function Sidebar({
             <FolderNode
               item={item}
               depth={depth}
+              isSelected={selectedFolderId === item.id}
+              onSelect={selectFolder}
               onToggle={toggleFolder}
+              onMoveSelectedFileHere={moveSelectedFileIntoFolder}
+              canMoveSelectedFile={!!activeFileId}
               onRename={renameItem}
               onDelete={deleteItem}
             />
@@ -97,7 +321,10 @@ export default function Sidebar({
             item={item}
             depth={depth}
             isActive={activeFileId === item.id}
-            onSelect={onSelectFile}
+            onSelect={(fileItem) => {
+              setSelectedFolderId(null)
+              onSelectFile(fileItem)
+            }}
             onRename={renameItem}
             onDelete={deleteItem}
             fileName={item.name}
@@ -114,7 +341,7 @@ export default function Sidebar({
 
         <button
           type="button"
-          onClick={onOpenUpload}
+          onClick={() => onOpenUpload(selectedFolderId ?? undefined)}
           className="flex w-full items-center justify-center gap-2 rounded-2xl bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
           disabled={isLoadingFiles}
         >
@@ -125,31 +352,48 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => {
-            const name = window.prompt('Enter folder name:')
-            if (name?.trim()) {
-              const newFolder: FileSystemItem = {
-                id: `folder-${crypto.randomUUID()}`,
-                name: name.trim(),
-                type: 'folder',
-                isOpen: true,
-                children: [],
-              }
-              setTree((prev) => [newFolder, ...prev])
-            }
+            setUiMessage('')
+            setCreateFolderOpen(true)
           }}
           className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-3 font-semibold text-zinc-300 hover:bg-zinc-700 hover:text-white"
         >
           <FolderPlus className="h-4 w-4" />
           + New Folder
         </button>
+
+        {selectedFolder?.type === 'folder' ? (
+          <p className="text-xs text-zinc-400">Target folder: {selectedFolder.name}</p>
+        ) : null}
+        {uiMessage ? <p className="text-xs text-red-400">{uiMessage}</p> : null}
       </div>
       
       <RenameModal
-        key={`${renameTargetId ?? 'none'}-${renameOpen ? 'open' : 'closed'}`}
         isOpen={renameOpen}
+        title="Rename item"
         currentName={renameTargetName}
+        confirmLabel="Rename"
         onClose={() => setRenameOpen(false)}
         onConfirm={handleConfirmRename}
+      />
+
+      <RenameModal
+        isOpen={createFolderOpen}
+        title="Create New Folder"
+        currentName=""
+        confirmLabel="Create"
+        onClose={() => setCreateFolderOpen(false)}
+        onConfirm={handleCreateFolder}
+      />
+
+      <RenameModal
+        isOpen={deleteDialogOpen}
+        title={`Delete ${deleteTargetType ?? 'item'}`}
+        message={`Are you sure you want to delete "${deleteTargetName}"?`}
+        requireInput={false}
+        confirmLabel="Delete"
+        danger
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={confirmDeleteItem}
       />
 
       <div className="px-3 pb-3 text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">

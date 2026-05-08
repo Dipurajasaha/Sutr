@@ -5,7 +5,7 @@ from app.core.database import Base
 
 ############################################################################################
 # -- SQLAlchemy model to map FAISS integer indices to application-level UUIDs --
-# -- This facilitates retrieval of text content and file context during the RAG process. --
+# -- this facilitates retrieval of text content and file context during the RAG process --
 ############################################################################################
 class VectorMetadata(Base):
     __tablename__ = "vector_metadata"

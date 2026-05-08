@@ -117,3 +117,22 @@ async def test_ask_question_missing_file_id(async_client: AsyncClient):
 
     response = await async_client.post("/api/v1/chat/query/", json=payload)
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_get_history_returns_messages(async_client: AsyncClient):
+    """Test GET /api/v1/chat/history/{session_id} returns stored turns."""
+    with patch("app.api.endpoints.get_chat_history_records") as mock_get_history:
+        mock_get_history.return_value = [
+            {"role": "human", "content": "What is stemming?"},
+            {"role": "ai", "content": "Stemming reduces words to roots."},
+        ]
+
+        response = await async_client.get("/api/v1/chat/history/test_session_history")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == "test_session_history"
+        assert len(data["messages"]) == 2
+        assert data["messages"][0]["role"] == "human"
+        assert data["messages"][1]["role"] == "ai"

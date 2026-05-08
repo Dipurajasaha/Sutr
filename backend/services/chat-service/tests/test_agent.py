@@ -14,19 +14,13 @@ async def test_search_document_success():
         
         # Mock the POST response
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "vectors": [
-                {"chunk_id": "chunk-1", "text": "Document chunk 1", "score": 0.95}
-            ]
-        }
+        mock_response.json.return_value = [
+            {"chunk_id": "chunk-1", "text": "Document chunk 1", "score": 0.95}
+        ]
         mock_client.post.return_value = mock_response
         
-        # Call the tool (may be decorated or direct function)
-        try:
-            result = search_document("search query", "file-123")
-        except TypeError:
-            # If it's a LangChain tool, call with invoke
-            result = search_document.invoke({"query": "search query", "file_id": "file-123"})
+        # Call the tool as a function (stub decorator passes through)
+        result = search_document("search query", "file-123")
         
         # Verify the result
         assert result is not None
@@ -41,15 +35,12 @@ async def test_search_document_empty_results():
         
         # Mock empty response
         mock_response = MagicMock()
-        mock_response.json.return_value = {"vectors": []}
+        mock_response.json.return_value = []
         mock_client.post.return_value = mock_response
         
-        try:
-            result = search_document("nonexistent query", "file-456")
-        except TypeError:
-            result = search_document.invoke({"query": "nonexistent query", "file_id": "file-456"})
+        result = search_document("nonexistent query", "file-456")
         
-        assert result is not None or "No" in str(result)
+        assert result is not None
 
 
 @pytest.mark.asyncio
@@ -61,19 +52,14 @@ async def test_search_document_multiple_results():
         
         # Mock response with multiple vectors
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "vectors": [
-                {"chunk_id": "chunk-1", "text": "First chunk", "score": 0.98},
-                {"chunk_id": "chunk-2", "text": "Second chunk", "score": 0.92},
-                {"chunk_id": "chunk-3", "text": "Third chunk", "score": 0.85}
-            ]
-        }
+        mock_response.json.return_value = [
+            {"chunk_id": "chunk-1", "text": "First chunk", "score": 0.98},
+            {"chunk_id": "chunk-2", "text": "Second chunk", "score": 0.92},
+            {"chunk_id": "chunk-3", "text": "Third chunk", "score": 0.85}
+        ]
         mock_client.post.return_value = mock_response
         
-        try:
-            result = search_document("multi query", "file-789")
-        except TypeError:
-            result = search_document.invoke({"query": "multi query", "file_id": "file-789"})
+        result = search_document("multi query", "file-789")
         
         assert result is not None
 
@@ -88,10 +74,7 @@ async def test_search_document_network_error():
         # Mock network error
         mock_client.post.side_effect = Exception("Connection refused")
         
-        try:
-            result = search_document("query", "file-123")
-        except TypeError:
-            result = search_document.invoke({"query": "query", "file_id": "file-123"})
+        result = search_document("query", "file-123")
         
         # Result should indicate an error occurred or be a string
         assert result is not None

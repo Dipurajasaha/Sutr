@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from app.main import app
 from app.api.endpoints import index_chunks, search_vectors
+from app.api.endpoints import get_file_chunks
 from app.schemas.vector import IndexRequest, SearchRequest, ChunkInput
 
 ##########################################################################################
@@ -234,6 +235,42 @@ async def test_search_vectors_faiss_minus_one(mock_vector_store):
         
     assert response.status_code == 200
     assert len(response.json()) == 0
+
+##########################################################################################
+# -- tests file-scoped chunk fallback endpoint --
+##########################################################################################
+@pytest.mark.asyncio
+async def test_get_file_chunks_direct_returns_ordered_chunks():
+    file_id = uuid.uuid4()
+
+    rows = [
+        SimpleNamespace(
+            chunk_id=uuid.uuid4(),
+            file_id=file_id,
+            text="first chunk",
+            start_time=0.0,
+            end_time=1.0,
+            faiss_id=1,
+        ),
+        SimpleNamespace(
+            chunk_id=uuid.uuid4(),
+            file_id=file_id,
+            text="second chunk",
+            start_time=1.0,
+            end_time=2.0,
+            faiss_id=2,
+        ),
+    ]
+
+    db_result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=db_result)
+
+    result = await get_file_chunks(str(file_id), limit=2, db=db)
+
+    assert len(result) == 2
+    assert result[0].text == "first chunk"
+    assert result[1].text == "second chunk"
 
 ##########################################################################################
 # -- db coverage --

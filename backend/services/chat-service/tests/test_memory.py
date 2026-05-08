@@ -167,3 +167,19 @@ def test_memory_sequential_access():
     # Should all be identical
     assert len(history1) == len(history2) == len(history3) == 3
     assert history1[1].content == history2[1].content == history3[1].content == "Q1"
+
+
+def test_memory_persists_after_cache_clear():
+    """Test that history survives in-memory cache clearing via the persistent store."""
+    _chat_histories.clear()
+    session_id = "session_persistent"
+
+    get_chat_history(session_id)
+    update_chat_history(session_id, "What is stemming?", "Stemming reduces words to roots.")
+
+    _chat_histories.clear()
+    history = get_chat_history(session_id)
+
+    contents = [message.content for message in history]
+    assert "What is stemming?" in contents
+    assert "Stemming reduces words to roots." in contents

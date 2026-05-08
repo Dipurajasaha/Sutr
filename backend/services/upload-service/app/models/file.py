@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, DateTime 
+from sqlalchemy import Column, String, DateTime, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from datetime import datetime, timezone 
@@ -19,3 +19,5 @@ class FileMetadata(Base):
     file_path = Column(String, unique=True) # local storage path 
     status = Column(String, default="uploaded") # state tracking: uploaded, processing, completed, failed 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    summary_quick = Column(Text, nullable=True) # Quick summary (auto-generated on upload)
+    summary_detailed = Column(Text, nullable=True) # Detailed summary/notes (auto-generated on upload)

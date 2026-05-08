@@ -5,7 +5,11 @@ import type { FileSystemItem } from './types'
 type FolderNodeProps = {
   item: FileSystemItem
   depth: number
+  isSelected: boolean
+  onSelect: (id: string) => void
   onToggle: (id: string) => void
+  onMoveSelectedFileHere: (folderId: string) => void
+  canMoveSelectedFile: boolean
   onRename: (id: string, currentName: string) => Promise<void> | void
   onDelete: (id: string) => Promise<void> | void
 }
@@ -13,7 +17,11 @@ type FolderNodeProps = {
 export default function FolderNode({
   item,
   depth,
+  isSelected,
+  onSelect,
   onToggle,
+  onMoveSelectedFileHere,
+  canMoveSelectedFile,
   onRename,
   onDelete,
 }: FolderNodeProps) {
@@ -30,8 +38,13 @@ export default function FolderNode({
       className="relative"
     >
       <div
+        onClick={() => onSelect(item.id)}
         style={{ paddingLeft: `${depth * 1 + 0.75}rem` }}
-        className="flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-2 text-left text-zinc-300 hover:bg-zinc-800/50"
+        className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-left transition-none ${
+          isSelected
+            ? 'border-fuchsia-500 bg-zinc-800 text-purple-400'
+            : 'border-transparent text-zinc-300 hover:bg-zinc-800/50'
+        }`}
       >
         <button
           type="button"
@@ -68,6 +81,19 @@ export default function FolderNode({
 
             {showMenu && (
               <div className="absolute right-0 top-8 z-50 w-48 rounded-lg border border-zinc-700 bg-zinc-800 py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onMoveSelectedFileHere(item.id)
+                    setShowMenu(false)
+                  }}
+                  disabled={!canMoveSelectedFile}
+                  className="flex w-full items-center gap-3 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                  Move selected file here
+                </button>
                 <button
                   type="button"
                   onClick={(e) => {

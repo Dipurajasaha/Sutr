@@ -21,7 +21,7 @@ async def forward_request(method: str, url: str, payload: dict = None, params: d
 async def forward_upload(url: str, file: UploadFile):
     async with httpx.AsyncClient() as client:
         try:
-            # -- read file into memory to forward --
+            # -- read file into memory before forwarding --
             file_content = await file.read()
             files = {"file": (file.filename, file_content, file.content_type)}
             

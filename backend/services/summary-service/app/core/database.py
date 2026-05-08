@@ -2,9 +2,9 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from sqlalchemy.orm import declarative_base
 from app.core.config import settings
 
-# #########################################################################################
+##########################################################################################
 # -- creates the async engine for the summary service --
-# #########################################################################################
+##########################################################################################
 engine = create_async_engine(settings.DATABASE_URL, echo=False)
 
 # -- session factory for creating database connections --

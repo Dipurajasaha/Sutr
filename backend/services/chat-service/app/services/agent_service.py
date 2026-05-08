@@ -5,58 +5,117 @@ from langchain.agents import create_agent
 from langchain_core.messages import HumanMessage, AIMessage
 
 from app.core.config import settings
-from app.services.memory_service import get_chat_history, update_chat_history
+from app.services.memory_service import SYSTEM_PROMPT, get_chat_history, update_chat_history
 
-
-#####################################################################################
-# -- global variable to cache sources when the tool is used --
-#####################################################################################
+# -- global cache for sources retrieved during tool use --
 current_sources = []
 
 
-#####################################################################################
-# -- the tool function that will be called by the agent when it needs to search the document --
-#####################################################################################
-@tool 
-def search_document(query: str, file_id: str) -> str:
-    """Use this tool ONLY when you need to retrieve information from the user's uploaded document."""
-    global current_sources
-    current_sources = []    # --> reset sources for this turn
+def build_contextual_query(history: list, query: str, max_turns: int = 4) -> str:
+    # -- build retrieval query preserving recent conversation context --
+    # -- helps disambiguate follow-up questions like "tell me more" --
+    recent_turns = []
+    for message in history[-max_turns:]:
+        if isinstance(message, (HumanMessage, AIMessage)):
+            role = "User" if isinstance(message, HumanMessage) else "Assistant"
+            content = getattr(message, "content", "")
+            if content:
+                recent_turns.append(f"{role}: {content}")
 
+    if recent_turns:
+        return "\n".join(recent_turns + [f"Current question: {query}"])
+
+    return query
+
+
+def _vector_search(query: str, file_id: str):
+    # -- search vector database for relevant chunks --
     url = f"{settings.VECTOR_SERVICE_URL}/api/v1/vectors/search/"
     payload = {"query": query, "file_id": file_id, "top_k": 4}
 
-    # -- using standard sync httpx inside the tool for stable  LangChain integration --
+    with httpx.Client() as client:
+        response = client.post(url, json=payload, timeout=10.0)
+        response.raise_for_status()
+        return response.json()
+
+
+def _fetch_file_chunks(file_id: str, limit: int = 4):
+    # -- fallback to retrieve early indexed chunks for a file --
+    url = f"{settings.VECTOR_SERVICE_URL}/api/v1/vectors/files/{file_id}/chunks/"
+    params = {"limit": limit}
+
+    with httpx.Client() as client:
+        response = client.get(url, params=params, timeout=10.0)
+        response.raise_for_status()
+        return response.json()
+
+
+def _store_sources(data: list) -> str:
+    # -- cache source chunks and format for LLM context --
+    global current_sources
+    current_sources = [
+        {
+            "chunk_id": str(d["chunk_id"]),
+            "text": d["text"],
+            "start_time": d.get("start_time"),
+            "end_time": d.get("end_time"),
+        }
+        for d in data
+    ]
+
+    return "\n\n".join([f"Context:\n{d['text']}" for d in data])
+
+
+##########################################################################
+# Search Document Tool
+##########################################################################
+@tool 
+def search_document(query: str, file_id: str) -> str:
+    """
+    Searches the user's uploaded document for relevant information. 
+    You MUST use this tool to find context before answering any questions about the file. 
+    Do not answer from your own knowledge.
+    """
+    # -- search document only when user explicitly needs information --
+    global current_sources
+    current_sources = []
+
     try:
-        with httpx.Client() as client:
-            response = client.post(url, json=payload, timeout=10.0)
-            response.raise_for_status()
-            data = response.json()
-            
-            if not data:
-                return "No relevant information found in the document."
+        data = _vector_search(query, file_id)
 
-            # -- save the sources globally so the endpoint can return them to the UI --
-            current_sources = [
-                {
-                    "chunk_id": str(d["chunk_id"]),
-                    "text": d["text"],
-                    "start_time": d.get("start_time"),
-                    "end_time": d.get("end_time"),
-                }
-                for d in data
-            ]
+        if not data:
+            return "No relevant information found in the document."
 
-            # -- returns the compiled text to the LLM --
-            return "\n\n".join([f"Context:\n{d['text']}" for d in data])
+        # -- cache sources for endpoint response --
+        return _store_sources(data)
         
     except Exception as e:
         return f"Database search failed: {str(e)}"
+
+
+def fetch_document_context(query: str, file_id: str):
+    # -- direct vector search bypassing LangChain tool wrapper --
+    global current_sources
+    current_sources = []
+
+    try:
+        data = _vector_search(query, file_id)
+
+        if not data:
+            data = _fetch_file_chunks(file_id, limit=4)
+
+        if not data:
+            return "No relevant information found in the document."
+
+        return _store_sources(data)
+    except Exception as e:
+        return f"Database search failed: {str(e)}"
     
-###################################################################################
-# -- Initialize the agent at the module level so it is created only once when the service starts --
-###################################################################################
-# -- 1. initialize the Longcat LLM --
+
+##########################################################################
+# Initialize Agent at Module Load
+##########################################################################
+# -- create Longcat LLM client --
 llm = ChatOpenAI(
     api_key=settings.LONGCAT_API_KEY,
     base_url=settings.LONGCAT_BASE_URL,
@@ -64,45 +123,51 @@ llm = ChatOpenAI(
     temperature=0.3
 )
 
-# -- 2. bind the tool to the LLM --
+# -- bind search tool to LLM --
 tools = [search_document]
 
-# -- 3. system prompt for the agent --
-system_prompt = (
-    "You are Sutr, a helpful and intelligent AI assistant. "
-    "You have access to a tool called 'search_document'. "
-    "If the user asks a question about their uploaded document, video, or audio, you MUST use the tool to find the answer. "
-    "If they are just chatting (e.g., 'hello', 'who are you'), answer naturally without using the tool. "
-    "You are a strict document analysis assistant. You must answer the user's question using ONLY the provided context chunks. If the answer cannot be found in the context, you must reply exactly with: 'I cannot answer this based on the provided document.' Do not use outside knowledge. Do not hallucinate."
-)
+# -- system prompt for agent behavior --
+system_prompt = SYSTEM_PROMPT
 
-# -- 4. build the agent using the new LangChain API --
+# -- build LangChain agent executor --
 agent_executor = create_agent(llm, tools, system_prompt=system_prompt, debug=False)
 
 
-#####################################################################################
-# -- Runs the agent and manages memory --
-#####################################################################################
+##########################################################################
+# Process Chat
+##########################################################################
 async def process_chat(session_id: str, query: str, file_id: str) -> tuple[str, list]:
     global current_sources
-    current_sources = []    # --> reset before execution
+    current_sources = []
 
-    history = get_chat_history(session_id)  # --> get current memory
+    # -- retrieve conversation history from memory --
+    history = get_chat_history(session_id)
 
-    # -- Build the input messages with history --
-    input_messages = history + [HumanMessage(content=f"User Query: {query}\n[Hidden System Note: If you need to search, use file_id '{file_id}']")]
+    # -- build contextual query with history for better retrieval --
+    contextual_query = build_contextual_query(history, query)
+    search_result = fetch_document_context(contextual_query, file_id)
 
-    # -- execute the agent --
+    # -- return refusal if no relevant context found --
+    if isinstance(search_result, str) and search_result.strip() == "No relevant information found in the document.":
+        answer = "I cannot answer this based on the provided document."
+        update_chat_history(session_id, query, answer)
+        return answer, []
+
+    # -- include retrieved context in agent input --
+    context_message = HumanMessage(content=f"Retrieved context for document (file_id={file_id}):\n{search_result}")
+    input_messages = history + [context_message, HumanMessage(content=f"User Query: {query}\n[Hidden System Note: If you need to search, use file_id '{file_id}']")]
+
+    # -- run agent with enriched context --
     response = await agent_executor.ainvoke({"messages": input_messages})
 
-    # -- Extract the answer from the response --
+    # -- extract answer from agent response --
     if isinstance(response.get("messages"), list) and len(response["messages"]) > 0:
         last_message = response["messages"][-1]
         answer = last_message.content if hasattr(last_message, "content") else str(last_message)
     else:
         answer = str(response.get("output", ""))
 
-    # update memory
+    # -- save to conversation memory --
     update_chat_history(session_id, query, answer)
 
     return answer, current_sources

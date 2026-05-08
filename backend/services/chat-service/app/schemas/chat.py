@@ -2,9 +2,11 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 class ChatRequest(BaseModel):
-    session_id: str     # --> unique id for the current browser/chat tab 
+    # -- unique id for the current browser/chat tab --
+    session_id: str
     query: str
-    file_id: str        # --> the current document using in chat 
+    # -- current document used in chat --
+    file_id: str
 
 class SourceChunk(BaseModel):
     chunk_id: str
@@ -14,4 +16,15 @@ class SourceChunk(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
-    sources: List[SourceChunk]  # --> will be populated only if the Vector DB was used 
+    # -- populated only if the vector DB was used --
+    sources: List[SourceChunk]
+
+
+class ChatHistoryMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatHistoryResponse(BaseModel):
+    session_id: str
+    messages: List[ChatHistoryMessage]

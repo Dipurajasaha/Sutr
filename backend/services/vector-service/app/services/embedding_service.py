@@ -5,9 +5,9 @@ from sentence_transformers import SentenceTransformer
 
 from app.core.config import settings
 
-###############################################################################
-# -- manages the FAISS vector store and embedding generation --
-###############################################################################
+##########################################################################
+# Vector Store Manager
+##########################################################################
 class VectorStoreManager:
     def __init__(self):
         print("Loading local embedding model (all-MiniLM-L6-v2)...")
@@ -24,18 +24,20 @@ class VectorStoreManager:
             print("Created new FAISS index.")
 
 
-    ##############################################################################
-    # -- converts text to vector embeddings --
-    ##############################################################################
+    ##########################################################################
+    # Generate Embeddings
+    ##########################################################################
     def generate_embeddings(self, texts: list[str]) -> np.ndarray:
+        # -- encode texts to vector embeddings --
         embeddings = self.model.encode(texts)
         return np.array(embeddings, dtype=np.float32)
     
 
-    ##############################################################################
-    # -- adds vectors to FAISS and returns their assigned integer IDs --
-    ##############################################################################
+    ##########################################################################
+    # Add Vectors to Index
+    ##########################################################################
     def add_to_index(self, embeddings: np.ndarray) -> list[int]:
+        # -- add embeddings to FAISS and persist index --
         start_id = self.index.ntotal
         self.index.add(embeddings)
 
@@ -44,13 +46,14 @@ class VectorStoreManager:
         return [start_id + i for i in range(len(embeddings))]
     
 
-    ##############################################################################
-    # -- searches for the closest vectors to the query --
-    ##############################################################################
+    ##########################################################################
+    # Search Index
+    ##########################################################################
     def search_index(self, query: str, top_k: int = 5) -> tuple[list[float], list[int]]:
+        # -- embed query and search FAISS for nearest neighbors --
         query_vector = self.generate_embeddings([query])
         distances, indices = self.index.search(query_vector, top_k)
         return distances[0].tolist(), indices[0].tolist()
 
-# -- singleton instance to be used across endpoints --
+# -- singleton vector store instance used across endpoints --
 vector_store = VectorStoreManager()    

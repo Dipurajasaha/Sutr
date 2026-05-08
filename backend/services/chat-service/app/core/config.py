@@ -12,6 +12,8 @@ if env_file.exists():
     load_dotenv(env_file, override=True)
 
 # -- Configuration for the Chat Service --
+default_history_path = project_root / "backend" / "services" / "chat-service" / "data" / "chat_history.json"
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Chat Service"
     LONGCAT_API_KEY: str = os.getenv("LONGCAT_API_KEY", "your_longcat_api_key_here")
@@ -19,6 +21,7 @@ class Settings(BaseSettings):
     LONGCAT_MODEL: str = "LongCat-Flash-Chat"
     
     VECTOR_SERVICE_URL: str = os.getenv("VECTOR_SERVICE_URL", "http://localhost:8003")
+    CHAT_HISTORY_PATH: str = os.getenv("CHAT_HISTORY_PATH", str(default_history_path))
 
     class Config:
         extra = "ignore"

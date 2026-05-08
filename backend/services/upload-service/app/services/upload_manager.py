@@ -8,18 +8,18 @@ from app.core.config import settings
 
 
 ##########################################################################
-# -- saves the uploaded file to local directory with a unique name --
+# Save File to Disk
 ##########################################################################
 async def save_file_to_disk(upload_file: UploadFile, file_id: str) -> str:
-
+    # -- ensure upload directory exists --
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-    # -- extract extension and create a safe, collision-free filename --
+    # -- extract extension and create collision-free filename --
     extension = os.path.splitext(upload_file.filename)[1]
     safe_filename = f"{file_id}{extension}"
     file_path = os.path.join(settings.UPLOAD_DIR, safe_filename)
 
-    # -- save filestream to disk --
+    # -- write uploaded file stream to disk --
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(upload_file.file, buffer)
     
@@ -27,10 +27,10 @@ async def save_file_to_disk(upload_file: UploadFile, file_id: str) -> str:
 
 
 ##########################################################################
-# -- creates a new record in the database for the uploaded file --
+# Create File Metadata
 ##########################################################################
 async def create_file_metadata(db: AsyncSession, filename: str, file_type: str, file_path: str) -> FileMetadata:
-
+    # -- save file record to database with initial uploaded status --
     db_file = FileMetadata(
         filename=filename,
         file_type=file_type,
@@ -44,10 +44,10 @@ async def create_file_metadata(db: AsyncSession, filename: str, file_type: str, 
 
 
 ##########################################################################
-# -- deletes a physical file from disk --
+# Delete File from Disk
 ##########################################################################
 async def delete_file_from_disk(file_path: str) -> None:
-    """Delete a physical file from the uploads directory."""
+    # -- remove physical file from uploads directory --
     if os.path.exists(file_path):
         os.remove(file_path)
     else:

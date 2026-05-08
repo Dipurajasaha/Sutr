@@ -5,6 +5,24 @@ from unittest.mock import patch, AsyncMock, MagicMock
 
 from app.main import app, startup_event
 
+
+class MockVectorResponse:
+    status_code = 201
+
+    def raise_for_status(self):
+        return None
+
+
+class MockVectorClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def post(self, *args, **kwargs):
+        return MockVectorResponse()
+
 ##########################################################################################
 # -- tests the application startup event for database initialization coverage --
 ##########################################################################################
@@ -39,7 +57,8 @@ async def test_process_file_not_found():
 @pytest.mark.asyncio
 @patch("app.api.endpoints.os.path.exists", return_value=True) # Trick API into thinking file exists
 @patch("app.api.endpoints.process_pdf") # Mock the actual AI extraction
-async def test_process_document_success(mock_process_pdf, mock_exists):
+@patch("app.api.endpoints.httpx.AsyncClient", return_value=MockVectorClient())
+async def test_process_document_success(mock_async_client, mock_process_pdf, mock_exists):
     # -- mock the AI returning chunked data --
     mock_process_pdf.return_value = [
         {"text": "Chunk 1 text", "start_time": None, "end_time": None},
@@ -63,7 +82,8 @@ async def test_process_document_success(mock_process_pdf, mock_exists):
 @pytest.mark.asyncio
 @patch("app.api.endpoints.os.path.exists", return_value=True)
 @patch("app.api.endpoints.process_media")
-async def test_process_media_success(mock_process_media, mock_exists):
+@patch("app.api.endpoints.httpx.AsyncClient", return_value=MockVectorClient())
+async def test_process_media_success(mock_async_client, mock_process_media, mock_exists):
     mock_process_media.return_value = [
         {"text": "Hello world", "start_time": 0.0, "end_time": 2.5}
     ]

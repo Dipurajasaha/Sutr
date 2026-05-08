@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Send, Sparkles, AlertCircle } from 'lucide-react'
 import { apiClient } from '../api/client'
 import type { FileSystemItem } from './types'
+import MarkdownBlock from './MarkdownBlock'
 
 type ChatViewProps = {
   activeFile: FileSystemItem | null
@@ -23,6 +24,20 @@ type ChatResponse = {
   sources?: SourceChunk[]
 }
 
+type ChatHistoryMessage = {
+  role: 'human' | 'ai'
+  content: string
+}
+
+type ChatHistoryResponse = {
+  session_id: string
+  messages: ChatHistoryMessage[]
+}
+
+const buildSessionStorageKey = (fileId: string) => `sutr_chat_session_${fileId}`
+
+const createSessionId = () => `session_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`
+
 export default function ChatView({ activeFile, onCitationClick }: ChatViewProps) {
   const isFile = activeFile?.type === 'file'
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -30,9 +45,46 @@ export default function ChatView({ activeFile, onCitationClick }: ChatViewProps)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [sessionId] = useState(
-    () => `session_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`
-  )
+  const [sessionId, setSessionId] = useState('')
+
+  useEffect(() => {
+    if (!activeFile?.id) {
+      setSessionId('')
+      setMessages([])
+      return
+    }
+
+    const storageKey = buildSessionStorageKey(activeFile.id)
+    const existingSessionId = window.localStorage.getItem(storageKey)
+    const nextSessionId = existingSessionId ?? createSessionId()
+
+    if (!existingSessionId) {
+      window.localStorage.setItem(storageKey, nextSessionId)
+    }
+
+    setSessionId(nextSessionId)
+  }, [activeFile?.id])
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!sessionId || !isFile) return
+
+      try {
+        const response = await apiClient.get<ChatHistoryResponse>(`/api/chat/history/${sessionId}`)
+        const historyMessages: ChatMessage[] = response.data.messages.map((message, index) => ({
+          id: `history_${sessionId}_${index}`,
+          role: message.role === 'human' ? 'user' : 'assistant',
+          content: message.content,
+        }))
+        setMessages(historyMessages)
+      } catch (historyError) {
+        console.error('Failed to load chat history:', historyError)
+        setMessages([])
+      }
+    }
+
+    void loadHistory()
+  }, [sessionId, isFile])
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -51,7 +103,7 @@ export default function ChatView({ activeFile, onCitationClick }: ChatViewProps)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!inputValue.trim() || !isFile || !activeFile) return
+    if (!inputValue.trim() || !isFile || !activeFile || !sessionId) return
 
     // Add user message immediately
     const userMessage: ChatMessage = {
@@ -121,7 +173,10 @@ export default function ChatView({ activeFile, onCitationClick }: ChatViewProps)
                         AI
                       </div>
                     ) : null}
-                    {message.content}
+                    <MarkdownBlock
+                      className="prose prose-invert max-w-none text-sm leading-relaxed"
+                      content={message.content}
+                    />
                       {/* Render citation buttons if assistant message has sources with start timestamps */}
                       {!isUser && message.sources && message.sources.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2">

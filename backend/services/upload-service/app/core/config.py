@@ -22,6 +22,10 @@ class Settings(BaseSettings):
 
     # -- directory where files will be stored locally --
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "./uploads")
+    
+    # -- external service URLs --
+    VECTOR_SERVICE_URL: str = os.getenv("VECTOR_SERVICE_URL", "http://localhost:8005")
+    SUMMARY_SERVICE_URL: str = os.getenv("SUMMARY_SERVICE_URL", "http://localhost:8006")
 
     # -- Pydantic V2 standard for config --
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
