@@ -9,7 +9,7 @@ project_root = config_path.parents[5]  # Go up to project root (D:\Projects\Sutr
 env_file = project_root / ".env"
 
 if env_file.exists():
-    load_dotenv(env_file)
+    load_dotenv(env_file, override=True)
 
 ##############################################################################
 # -- configuration settings for the Vector Service --

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Float
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.core.database import Base
@@ -14,3 +14,5 @@ class VectorMetadata(Base):
     chunk_id = Column(UUID(as_uuid=True), index=True, nullable=False, unique=True)
     file_id = Column(UUID(as_uuid=True), index=True, nullable=False)
     text = Column(String, nullable=False)
+    start_time = Column(Float, nullable=True)
+    end_time = Column(Float, nullable=True)

@@ -57,7 +57,7 @@ jobs:
         env:
           # -- point the tests to the temporary CI database --
           DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@localhost:5432/sutr_test_db
-          LONGCAT_API_KEY: test-key
+          LONGCAT_API_KEY: ak_2Hn2iK0C05OT5sn0Vu6tD8Nb2JF5R
         run: |
           cd backend/services/${{ matrix.service }}
           # -- set PYTHONPATH to current dir so 'app' module is importable --

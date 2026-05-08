@@ -8,6 +8,8 @@ class ChunkInput(BaseModel):
     chunk_id: UUID
     file_id: UUID
     text: str
+    start_time: float | None = None
+    end_time: float | None = None
 
 # -- payload schema for the /index/ endpoint --
 class IndexRequest(BaseModel):
@@ -25,3 +27,5 @@ class SearchResult(BaseModel):
     file_id: UUID   
     text: str
     score: float
+    start_time: float | None = None
+    end_time: float | None = None

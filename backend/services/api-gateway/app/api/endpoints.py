@@ -1,4 +1,7 @@
-from fastapi import APIRouter, File, UploadFile, Request
+from fastapi import APIRouter, File, UploadFile, Request, HTTPException
+from fastapi.responses import StreamingResponse
+import httpx
+
 from app.services.proxy import forward_request, forward_upload
 from app.core.config import settings
 
@@ -12,10 +15,29 @@ async def gateway_upload_file(file: UploadFile = File(...)):
     url = f"{settings.UPLOAD_SERVICE_URL}/api/v1/upload/"
     return await forward_upload(url, file)
 
+@router.get("/files/")
+async def gateway_list_files():
+    """List all files from the upload service."""
+    url = f"{settings.UPLOAD_SERVICE_URL}/api/v1/files/"
+    return await forward_request("GET", url)
+
 @router.get("/files/{file_id}")
 async def gateway_get_file(file_id: str):
     url = f"{settings.UPLOAD_SERVICE_URL}/api/v1/files/{file_id}"
     return await forward_request("GET", url)
+
+@router.delete("/files/{file_id}")
+async def gateway_delete_file(file_id: str):
+    """Delete a file from the upload service."""
+    url = f"{settings.UPLOAD_SERVICE_URL}/api/v1/files/{file_id}"
+    return await forward_request("DELETE", url)
+
+@router.patch("/files/{file_id}")
+async def gateway_rename_file(file_id: str, request: Request):
+    """Rename a file in the upload service."""
+    payload = await request.json()
+    url = f"{settings.UPLOAD_SERVICE_URL}/api/v1/files/{file_id}"
+    return await forward_request("PATCH", url, payload=payload)
 
 # ==========================================
 # 2. PROCESSING ROUTES
@@ -38,11 +60,21 @@ async def gateway_chat_query(request: Request):
 # ==========================================
 # 4. SUMMARY ROUTES
 # ==========================================
+@router.post("/summary/generate")
 @router.post("/summary/generate/")
 async def gateway_generate_summary(request: Request):
     payload = await request.json()
-    url = f"{settings.SUMMARY_SERVICE_URL}/api/v1/summary/generate/"
-    return await forward_request("POST", url, payload=payload)
+    primary_url = f"{settings.SUMMARY_SERVICE_URL}/api/v1/summary/generate"
+    print(f"[gateway-summary] primary_url={primary_url}")
+    try:
+        return await forward_request("POST", primary_url, payload=payload)
+    except HTTPException as e:
+        # Fallback for stale SUMMARY_SERVICE_URL values in long-lived environments.
+        if e.status_code != 404:
+            raise
+        fallback_url = "http://localhost:8006/api/v1/summary/generate"
+        print(f"[gateway-summary] fallback_url={fallback_url}")
+        return await forward_request("POST", fallback_url, payload=payload)
 
 # ==========================================
 # 5. MEDIA ROUTES
@@ -53,3 +85,27 @@ async def gateway_media_playback(file_id: str, request: Request):
     params = dict(request.query_params)
     url = f"{settings.MEDIA_SERVICE_URL}/api/v1/media/playback/{file_id}"
     return await forward_request("GET", url, params=params)
+
+
+# Proxy static uploads from upload-service so frontend can request via gateway
+@router.get("/uploads/{file_path:path}")
+async def gateway_uploads(file_path: str, request: Request):
+    url = f"{settings.UPLOAD_SERVICE_URL}/uploads/{file_path}"
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(url, params=dict(request.query_params), timeout=30.0)
+            resp.raise_for_status()
+            # forward important headers
+            headers = {}
+            if resp.headers.get("content-type"):
+                headers["content-type"] = resp.headers.get("content-type")
+            for h in ("content-range", "accept-ranges", "content-length", "cache-control", "last-modified", "etag"):
+                if resp.headers.get(h):
+                    headers[h] = resp.headers.get(h)
+
+            return StreamingResponse(resp.aiter_bytes(), status_code=resp.status_code, headers=headers)
+        except httpx.HTTPStatusError as e:
+            return StreamingResponse(e.response.aiter_bytes() if e.response is not None else iter(()), status_code=e.response.status_code if e.response is not None else 502)
+        except httpx.RequestError as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=503, detail=f"Upload service unavailable: {str(e)}")

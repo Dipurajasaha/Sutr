@@ -8,6 +8,7 @@ from app.schemas.process import ProcessRequest, ProcessResponse
 from app.models.chunk import TextChunk
 from app.services.pdf_parser import process_pdf
 from app.services.media_parser import process_media
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -16,16 +17,25 @@ router = APIRouter()
 #####################################################################################
 @router.post("/process/", response_model=ProcessResponse)
 async def process_file(request: ProcessRequest, db: AsyncSession = Depends(get_db)):
+    file_type = "document" if request.file_type == "pdf" else request.file_type
+    file_path = request.file_path
+    if not os.path.isabs(file_path):
+        candidates = [
+            file_path,
+            os.path.join(settings.UPLOAD_DIR, file_path),
+            os.path.join("..", "upload-service", "uploads", os.path.basename(file_path)),
+        ]
+        file_path = next((p for p in candidates if os.path.exists(p)), file_path)
 
-    if not os.path.exists(request.file_path):
+    if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail=f"File not found at {request.file_path}")
     
     try:
         # -- 1. route to correct processor --
-        if request.file_type == "document":
-            extracted_data = await run_in_threadpool(process_pdf, request.file_path)
-        elif request.file_type in ["audio", "video"]:
-            extracted_data = await run_in_threadpool(process_media, request.file_path)
+        if file_type == "document":
+            extracted_data = await run_in_threadpool(process_pdf, file_path)
+        elif file_type in ["audio", "video"]:
+            extracted_data = await run_in_threadpool(process_media, file_path)
         else:
             raise HTTPException(status_code=400, detail="Unsupported file type.")
         

@@ -41,3 +41,14 @@ async def create_file_metadata(db: AsyncSession, filename: str, file_type: str, 
     await db.commit()
     await db.refresh(db_file)
     return db_file
+
+
+##########################################################################
+# -- deletes a physical file from disk --
+##########################################################################
+async def delete_file_from_disk(file_path: str) -> None:
+    """Delete a physical file from the uploads directory."""
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    else:
+        raise FileNotFoundError(f"File not found at path: {file_path}")

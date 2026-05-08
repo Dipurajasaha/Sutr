@@ -30,7 +30,9 @@ async def index_chunks(request: IndexRequest, db: AsyncSession = Depends(get_db)
             faiss_id = faiss_ids[i],
             chunk_id = chunk.chunk_id,
             file_id = chunk.file_id,
-            text=chunk.text
+            text=chunk.text,
+            start_time=chunk.start_time,
+            end_time=chunk.end_time,
         )
         db.add(record)
         db_records.append(record)
@@ -66,7 +68,9 @@ async def search_vectors(request: SearchRequest, db: AsyncSession = Depends(get_
                 chunk_id=metadata.chunk_id,
                 file_id=metadata.file_id,
                 text=metadata.text,
-                score=score
+                score=score,
+                start_time=metadata.start_time,
+                end_time=metadata.end_time,
             ))
 
     return results

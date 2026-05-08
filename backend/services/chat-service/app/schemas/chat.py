@@ -9,6 +9,8 @@ class ChatRequest(BaseModel):
 class SourceChunk(BaseModel):
     chunk_id: str
     text: str
+    start_time: float | None = None
+    end_time: float | None = None
 
 class ChatResponse(BaseModel):
     answer: str

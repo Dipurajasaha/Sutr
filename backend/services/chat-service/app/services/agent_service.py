@@ -37,7 +37,15 @@ def search_document(query: str, file_id: str) -> str:
                 return "No relevant information found in the document."
 
             # -- save the sources globally so the endpoint can return them to the UI --
-            current_sources = [{"chunk_id": str(d["chunk_id"]), "text": d["text"]} for d in data]
+            current_sources = [
+                {
+                    "chunk_id": str(d["chunk_id"]),
+                    "text": d["text"],
+                    "start_time": d.get("start_time"),
+                    "end_time": d.get("end_time"),
+                }
+                for d in data
+            ]
 
             # -- returns the compiled text to the LLM --
             return "\n\n".join([f"Context:\n{d['text']}" for d in data])
@@ -64,7 +72,8 @@ system_prompt = (
     "You are Sutr, a helpful and intelligent AI assistant. "
     "You have access to a tool called 'search_document'. "
     "If the user asks a question about their uploaded document, video, or audio, you MUST use the tool to find the answer. "
-    "If they are just chatting (e.g., 'hello', 'who are you'), answer naturally without using the tool."
+    "If they are just chatting (e.g., 'hello', 'who are you'), answer naturally without using the tool. "
+    "You are a strict document analysis assistant. You must answer the user's question using ONLY the provided context chunks. If the answer cannot be found in the context, you must reply exactly with: 'I cannot answer this based on the provided document.' Do not use outside knowledge. Do not hallucinate."
 )
 
 # -- 4. build the agent using the new LangChain API --

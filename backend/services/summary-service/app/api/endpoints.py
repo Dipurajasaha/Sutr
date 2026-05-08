@@ -6,7 +6,7 @@ from app.services.summary_manager import generate_summary
 
 router = APIRouter()
 
-@router.post("/generate/", response_model=SummaryResponse)
+@router.post("/generate", response_model=SummaryResponse)
 async def request_summary(request: SummaryRequest, db: AsyncSession = Depends(get_db)):
     # -- trigger the summarization logic --
     summary_text = await generate_summary(db, str(request.file_id), request.summary_type)
