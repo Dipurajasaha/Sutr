@@ -98,5 +98,83 @@
       "role": "ai",
       "content": "This audio discusses whether MCP will replace RAG or retrieval augmented generation. It explains that RAG is a pipeline involving ingestion to collect data and chunking to turn them into vectors."
     }
+  ],
+  "session_yg54s6ie4_1778273121995": [
+    {
+      "role": "human",
+      "content": "what is genai"
+    },
+    {
+      "role": "ai",
+      "content": "I cannot answer this based on the provided document."
+    },
+    {
+      "role": "human",
+      "content": "RAG"
+    },
+    {
+      "role": "ai",
+      "content": "I cannot answer this based on the provided document."
+    },
+    {
+      "role": "human",
+      "content": "RAG"
+    },
+    {
+      "role": "ai",
+      "content": "I cannot answer this based on the provided document."
+    }
+  ],
+  "session_ezyyv8x3o_1778278128297": [
+    {
+      "role": "human",
+      "content": "RAG"
+    },
+    {
+      "role": "ai",
+      "content": "I cannot answer this based on the provided document."
+    },
+    {
+      "role": "human",
+      "content": "what is rag"
+    },
+    {
+      "role": "ai",
+      "content": "I cannot answer this based on the provided document."
+    },
+    {
+      "role": "human",
+      "content": "what is deep fakes"
+    },
+    {
+      "role": "ai",
+      "content": "I cannot answer this based on the provided document."
+    },
+    {
+      "role": "human",
+      "content": "generative ai"
+    },
+    {
+      "role": "ai",
+      "content": "I cannot answer this based on the provided document."
+    },
+    {
+      "role": "human",
+      "content": "what is this video about?"
+    },
+    {
+      "role": "ai",
+      "content": "The video discusses the topic of deep fakes. It mentions that deep fakes are created using certain technologies or methods, although the specific details of these technologies or methods are not provided in the given context. The video seems to focus on the concept and creation of deep fakes."
+    }
+  ],
+  "session_uyj7fyulx_1778278619206": [
+    {
+      "role": "human",
+      "content": "what is mcp"
+    },
+    {
+      "role": "ai",
+      "content": "I cannot answer this based on the provided document."
+    }
   ]
 }

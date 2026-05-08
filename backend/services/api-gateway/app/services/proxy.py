@@ -2,18 +2,25 @@ import httpx
 from fastapi import HTTPException, UploadFile
 
 ##########################################################################################
-# -- generic forwarder for JSON payloads --
+# -- generic forwarder for JSON payloads with configurable timeout --
 ##########################################################################################
-async def forward_request(method: str, url: str, payload: dict = None, params: dict = None):
+async def forward_request(method: str, url: str, payload: dict = None, params: dict = None, timeout: float = 120.0):
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.request(method, url, json=payload, params=params, timeout=30.0)
+            response = await client.request(method, url, json=payload, params=params, timeout=timeout)
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
         except httpx.RequestError as e:
             raise HTTPException(status_code=503, detail=f"Service unavailable: {str(e)}")
+
+##########################################################################################
+# -- specialized forwarder for long-running media/processing tasks (up to 20 min) --
+##########################################################################################
+async def forward_process_request(method: str, url: str, payload: dict = None, params: dict = None):
+    # -- allow up to 20 minutes for Whisper transcription of long videos --
+    return await forward_request(method, url, payload, params, timeout=1200.0)
 
 ##########################################################################################
 # -- specialized forwarder for multipart file uploads --

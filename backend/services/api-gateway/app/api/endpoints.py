@@ -2,7 +2,7 @@ from fastapi import APIRouter, File, UploadFile, Request, HTTPException
 from fastapi.responses import StreamingResponse
 import httpx
 
-from app.services.proxy import forward_request, forward_upload
+from app.services.proxy import forward_request, forward_upload, forward_process_request
 from app.core.config import settings
 
 router = APIRouter()
@@ -44,13 +44,13 @@ async def gateway_rename_file(file_id: str, request: Request):
 
 
 ##########################################################################
-# -- 2. PROCESSING ROUTES --
+# -- 2. PROCESSING ROUTES (with extended timeout for long Whisper jobs) --
 ##########################################################################
 @router.post("/process/")
 async def gateway_process_file(request: Request):
     payload = await request.json()
     url = f"{settings.PROCESS_SERVICE_URL}/api/v1/process/"
-    return await forward_request("POST", url, payload=payload)
+    return await forward_process_request("POST", url, payload=payload)
 
 
 ##########################################################################

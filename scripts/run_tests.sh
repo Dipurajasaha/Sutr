@@ -6,7 +6,7 @@ SERVICES=(
   "upload-service"
   "processing-service"
   "vector-service"
-  "chat-service"      # passed
+  "chat-service" 
   "summary-service"
   "media-service"
   "api-gateway"

@@ -30,41 +30,61 @@ def _sanitize_chunk_text(value) -> str:
 ##########################################################################
 @router.post("/index/", status_code=201)
 async def index_chunks(request: IndexRequest, db: AsyncSession = Depends(get_db)):
-    if not request.chunks:
-        raise HTTPException(status_code=400, detail="No chunks provided.")
-    
-    normalized_chunks = []
-    for chunk in request.chunks:
-        clean_text = _sanitize_chunk_text(chunk.text)
-        if not clean_text:
-            continue
-        normalized_chunks.append((chunk, clean_text))
+    try:
+        if not request.chunks:
+            raise HTTPException(status_code=400, detail="No chunks provided.")
+        
+        normalized_chunks = []
+        file_ids_to_process = set()
+        for chunk in request.chunks:
+            clean_text = _sanitize_chunk_text(chunk.text)
+            if not clean_text:
+                continue
+            normalized_chunks.append((chunk, clean_text))
+            file_ids_to_process.add(chunk.file_id)
 
-    if not normalized_chunks:
-        raise HTTPException(status_code=400, detail="No valid chunks to index.")
+        if not normalized_chunks:
+            raise HTTPException(status_code=400, detail="No valid chunks to index.")
 
-    texts = [clean_text for _, clean_text in normalized_chunks]
+        # -- if FAISS was recreated from scratch, clear stale DB ids to avoid primary-key collisions --
+        if vector_store.index.ntotal == 0:
+            from sqlalchemy import delete
+            await db.execute(delete(VectorMetadata))
 
-    # -- generate embeddings and add to FAISS index --
-    embeddings = vector_store.generate_embeddings(texts)
-    faiss_ids = vector_store.add_to_index(embeddings)
+        # -- delete existing chunks for these files to avoid unique constraint violations --
+        from sqlalchemy import delete
+        for file_id in file_ids_to_process:
+            await db.execute(delete(VectorMetadata).where(VectorMetadata.file_id == file_id))
 
-    # -- map FAISS IDs to chunk UUIDs in PostgreSQL --
-    db_records = []
-    for i, (chunk, clean_text) in enumerate(normalized_chunks):
-        record = VectorMetadata(
-            faiss_id = faiss_ids[i],
-            chunk_id = chunk.chunk_id,
-            file_id = chunk.file_id,
-            text=clean_text,
-            start_time=chunk.start_time,
-            end_time=chunk.end_time,
-        )
-        db.add(record)
-        db_records.append(record)
+        texts = [clean_text for _, clean_text in normalized_chunks]
 
-    await db.commit()
-    return {"status": "success", "indexed_count": len(db_records)}
+        # -- generate embeddings and add to FAISS index --
+        embeddings = vector_store.generate_embeddings(texts)
+        faiss_ids = vector_store.add_to_index(embeddings)
+
+        # -- map FAISS IDs to chunk UUIDs in PostgreSQL --
+        db_records = []
+        for i, (chunk, clean_text) in enumerate(normalized_chunks):
+            record = VectorMetadata(
+                faiss_id = faiss_ids[i],
+                chunk_id = chunk.chunk_id,
+                file_id = chunk.file_id,
+                text=clean_text,
+                start_time=chunk.start_time,
+                end_time=chunk.end_time,
+            )
+            db.add(record)
+            db_records.append(record)
+
+        await db.commit()
+        return {"status": "success", "indexed_count": len(db_records)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error("Index endpoint error: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
 
 
 ##########################################################################

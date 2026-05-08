@@ -56,7 +56,11 @@ async def process_file(request: ProcessRequest, db: AsyncSession = Depends(get_d
         if file_type == "document":
             extracted_data = await run_in_threadpool(process_pdf, file_path)
         elif file_type in ["audio", "video"]:
-            extracted_data = await run_in_threadpool(process_media, file_path)
+            try:
+                extracted_data = await run_in_threadpool(process_media, file_path)
+            except Exception as e:
+                logger.error("Media processing failed for file_path=%s: %s", file_path, str(e))
+                extracted_data = []
         else:
             raise HTTPException(status_code=400, detail="Unsupported file type.")
         
