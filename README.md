@@ -76,6 +76,12 @@ backend/services/<service-name>/
 └── requirements.txt               # Python dependencies
 ```
 
+**Dependency Layout:**
+- Each microservice can keep its own runtime requirements in `requirements.txt`.
+- Test-only packages can live in a separate `requirements-dev.txt` so production images stay smaller.
+- Shared packages should only be placed in a common file when multiple services truly need them.
+- Docker images should install runtime dependencies only unless the container is meant for test execution.
+
 ---
 
 ## 🚀 Services Overview
@@ -251,49 +257,132 @@ end_time: float (optional)
 
 ---
 
-## 🛠️ How to Run Locally
+## � Docker & Containerization
+
+Sutr is fully containerized with production-ready Docker support, including GPU acceleration for AI workloads.
+
+### Docker Architecture
+
+**Multi-Stage Builds:**
+- Optimized Dockerfiles minimize image sizes
+- Runtime dependencies only in production images
+- Separate `requirements-dev.txt` for test containers
+
+**Container Specifications:**
+
+| Service | Base | Port |
+|---------|------|------|
+| API Gateway | python:3.11-slim | 8000 |
+| Upload Service | python:3.11-slim | 8001 |
+| Processing Service | pytorch:2.1-cuda12.1 | 8002 |
+| Media Service | python:3.11-slim | 8003 |
+| Vector Service | pytorch:2.1-cuda12.1 | 8004 |
+| Summary Service | python:3.11-slim | 8005 |
+| Chat Service | python:3.11-slim | 8006 |
+| PostgreSQL | postgres:15-alpine | 5432 |
+| Frontend | node:20-alpine | 5173 |
+
+**GPU Acceleration:**
+- Processing Service: GPU-optimized Whisper transcription (~10x faster on NVIDIA hardware)
+- Vector Service: GPU-accelerated embeddings via sentence-transformers
+- Requires: NVIDIA Docker runtime + compatible GPU (auto-detects, falls back to CPU)
+
+**Networking:**
+- All services on private `sutr_network` bridge
+- Services communicate via container names (e.g., `http://vector-service:8000`)
+- Only API Gateway and Frontend exposed to host via published ports
+- No hardcoded `localhost` URLs in production (all dynamic via environment variables)
+
+### Docker Compose Configuration
+
+**Environment Variables (.env):**
+```yaml
+DATABASE_URL=postgresql+asyncpg://sutr_admin:sutr_password@postgres:5432/sutr_db
+UPLOAD_SERVICE_URL=http://upload-service:8000
+PROCESS_SERVICE_URL=http://processing-service:8000
+VECTOR_SERVICE_URL=http://vector-service:8000
+CHAT_SERVICE_URL=http://chat-service:8000
+SUMMARY_SERVICE_URL=http://summary-service:8000
+MEDIA_SERVICE_URL=http://media-service:8000
+LONGCAT_API_KEY=your_key_here
+```
+
+**Volumes:**
+- `postgres_data` → PostgreSQL persistence
+- `uploads` → Shared file storage across services
+
+### Quick Start & Common Commands
+
+```bash
+# Start all services
+docker compose up -d --build
+
+# View status and logs
+docker compose ps
+docker compose logs -f                    # All services
+docker compose logs -f <service-name>      # Specific service
+
+# Restart and manage
+docker compose up -d --build <service-name>  # Rebuild one service
+docker compose down -v && docker compose up -d --build  # Clean restart
+
+# Verify services
+curl http://localhost:8000/api/files/     # Check API Gateway
+docker compose exec processing-service nvidia-smi  # Check GPU
+```
+
+### Production Deployment Checklist
+
+- [ ] Update `.env` with production URLs and API keys
+- [ ] Change `allow_origins` to specific domain (not `["*"]`)
+- [ ] Use external PostgreSQL for data durability
+- [ ] Use secrets management (Docker Secrets, AWS Secrets Manager, etc.)
+- [ ] Enable logging to centralized system (ELK, CloudWatch, etc.)
+- [ ] Configure health checks for orchestration (Kubernetes, ECS)
+
+---
+
+## 🛠️ How to Run Locally (Manual Setup)
+
+If you prefer running services directly without Docker (not recommended - Docker setup above is simpler):
 
 ### Prerequisites
 - Python 3.11+
-- PostgreSQL 14+
-- Docker Compose
-- ~4GB RAM (Whisper model + FAISS index)
+- PostgreSQL 14+ (running locally)
+- Node.js 20+ (for frontend)
+- ~4GB RAM
 
-### 1. Start Infrastructure
+### 1. Start PostgreSQL
 ```bash
-docker-compose up -d postgres
+psql -U postgres -c "CREATE DATABASE sutr_db;"
 ```
 
 ### 2. Activate Virtual Environment
 ```bash
 source venv/bin/activate  # macOS/Linux
-# or
 .\venv\Scripts\Activate.ps1  # Windows
 ```
 
-### 3. Run Individual Services
-Navigate to each service directory and start with uvicorn:
-
+### 3. Run Each Service
 ```bash
 cd backend/services/<service-name>
+pip install -r requirements.txt
 uvicorn app.main:app --reload --port <port>
 ```
 
-**Service Ports:**
-- Upload: 8001
-- Processing: 8002
-- Chat: 8004
-- Vector: 8005
-- Summary: 8006
-- Media: 8007
-- API Gateway: 8000
+**Service Ports:** Gateway (8000) | Upload (8001) | Processing (8002) | Media (8003) | Vector (8004) | Summary (8005) | Chat (8006)
 
-### 4. Verify All Services are Running
+### 4. Start Frontend
 ```bash
-curl http://localhost:8000/api/files/
+cd frontend
+npm install
+npm run dev  # Runs on http://localhost:5173
 ```
 
-Should return an empty array `[]` if the database is initialized.
+### 5. Verify
+```bash
+curl http://localhost:8000/api/files/  # Should return: []
+```
 
 ---
 

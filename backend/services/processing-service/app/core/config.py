@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://sutr_admin:sutr_password@localhost:5432/sutr_db")
     UPLOAD_DIR: str = os.getenv("UPLOAD_DIR", "../upload-service/uploads")  # -- shared volume for local dev --
     VECTOR_SERVICE_URL: str = os.getenv("VECTOR_SERVICE_URL", "http://localhost:8005")
+    SUMMARY_SERVICE_URL: str = os.getenv("SUMMARY_SERVICE_URL", "http://localhost:8006")
 
     class Config:
         env_file = ".env"

@@ -1,9 +1,4 @@
-version: '3.8'
-
 x-base-service: &base-service
-  build:
-    context: ./backend
-    dockerfile: ./services/${SERVICE_NAME}/Dockerfile
   restart: unless-stopped
   env_file:
     - .env
@@ -28,6 +23,126 @@ services:
       - sutr_network
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  api-gateway:
+    <<: *base-service
+    container_name: sutr_api_gateway
+    build:
+      context: ./backend
+      dockerfile: ./services/api-gateway/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@postgres:5432/sutr_db
+      CHAT_SERVICE_URL: http://chat-service:8000
+      PROCESS_SERVICE_URL: http://processing-service:8000
+      UPLOAD_SERVICE_URL: http://upload-service:8000
+      VECTOR_SERVICE_URL: http://vector-service:8000
+      MEDIA_SERVICE_URL: http://media-service:8000
+      SUMMARY_SERVICE_URL: http://summary-service:8000
+    depends_on:
+      - postgres
+
+  upload-service:
+    <<: *base-service
+    container_name: sutr_upload_service
+    build:
+      context: ./backend
+      dockerfile: ./services/upload-service/Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@postgres:5432/sutr_db
+      PROCESS_SERVICE_URL: http://processing-service:8000
+      VECTOR_SERVICE_URL: http://vector-service:8000
+      SUMMARY_SERVICE_URL: http://summary-service:8000
+    volumes:
+      - ./backend/services/upload-service/uploads:/workspace/backend/services/upload-service/uploads
+
+  processing-service:
+    <<: *base-service
+    container_name: sutr_processing_service
+    build:
+      context: ./backend
+      dockerfile: ./services/processing-service/Dockerfile.gpu
+    gpus: all
+    ports:
+      - "8002:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@postgres:5432/sutr_db
+      UPLOAD_DIR: /workspace/backend/services/upload-service/uploads
+      UPLOAD_SERVICE_URL: http://upload-service:8000
+      VECTOR_SERVICE_URL: http://vector-service:8000
+      SUMMARY_SERVICE_URL: http://summary-service:8000
+    depends_on:
+      - postgres
+      - upload-service
+      - vector-service
+      - summary-service
+    volumes:
+      - ./backend/services/upload-service/uploads:/workspace/backend/services/upload-service/uploads
+
+  media-service:
+    <<: *base-service
+    container_name: sutr_media_service
+    build:
+      context: ./backend
+      dockerfile: ./services/media-service/Dockerfile
+    ports:
+      - "8003:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@postgres:5432/sutr_db
+
+  vector-service:
+    <<: *base-service
+    container_name: sutr_vector_service
+    build:
+      context: ./backend
+      dockerfile: ./services/vector-service/Dockerfile
+    ports:
+      - "8004:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@postgres:5432/sutr_db
+    depends_on:
+      - postgres
+
+  summary-service:
+    <<: *base-service
+    container_name: sutr_summary_service
+    build:
+      context: ./backend
+      dockerfile: ./services/summary-service/Dockerfile
+    ports:
+      - "8005:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@postgres:5432/sutr_db
+
+  chat-service:
+    <<: *base-service
+    container_name: sutr_chat_service
+    build:
+      context: ./backend
+      dockerfile: ./services/chat-service/Dockerfile
+    ports:
+      - "8006:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sutr_admin:sutr_password@postgres:5432/sutr_db
+      VECTOR_SERVICE_URL: http://vector-service:8000
+
+  frontend:
+    restart: unless-stopped
+    container_name: sutr_frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      NODE_ENV: development
+    depends_on:
+      - api-gateway
+    networks:
+      - sutr_network
 
 volumes:
   postgres_data:

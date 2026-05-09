@@ -6,6 +6,14 @@ import FileNode from './FileNode'
 import type { FileSystemItem } from './types'
 import RenameModal from './RenameModal'
 
+type UploadQueueItem = {
+  clientId: string
+  name: string
+  progress: number
+  status: 'queued' | 'uploading' | 'processing' | 'completed' | 'failed'
+  errorMessage?: string
+}
+
 type SidebarProps = {
   activeFileId: string | null
   tree: FileSystemItem[]
@@ -15,6 +23,7 @@ type SidebarProps = {
   onDeleteFile: (fileId: string) => Promise<void>
   onRenameFile: (fileId: string, newName: string) => Promise<void>
   isLoadingFiles?: boolean
+  uploadQueue: UploadQueueItem[]
 }
 
 export default function Sidebar({
@@ -26,6 +35,7 @@ export default function Sidebar({
   onDeleteFile,
   onRenameFile,
   isLoadingFiles = false,
+  uploadQueue,
 }: SidebarProps) {
   const toggleFolder = (id: string) => {
     setTree((prev) => toggleFolderRecursive(prev, id))
@@ -294,6 +304,15 @@ export default function Sidebar({
   }, [tree, selectedFolderId])
 
   const selectedFolder = selectedFolderId ? findItemByIdRecursive(tree, selectedFolderId) : null
+  const activeUploads = uploadQueue.filter(
+    (item) => item.status === 'queued' || item.status === 'uploading' || item.status === 'processing',
+  )
+  const uploadPanelItems = activeUploads.length > 0 ? activeUploads : uploadQueue
+  const hasFailedUploads = uploadQueue.some((item) => item.status === 'failed')
+  const averageProgress =
+    uploadPanelItems.length > 0
+      ? Math.round(uploadPanelItems.reduce((sum, item) => sum + item.progress, 0) / uploadPanelItems.length)
+      : 0
 
   const renderTree = (items: FileSystemItem[], depth: number = 0) => {
     return items.map((item) => {
@@ -415,6 +434,55 @@ export default function Sidebar({
           <div className="space-y-1">{renderTree(tree)}</div>
         )}
       </div>
+
+      {uploadQueue.length > 0 ? (
+        <div className="border-t border-zinc-800 p-3">
+          <div className="group relative rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-zinc-200">
+                {activeUploads.length > 0
+                  ? `${activeUploads.length} file${activeUploads.length > 1 ? 's' : ''} uploading`
+                  : hasFailedUploads
+                    ? 'Upload finished with errors'
+                    : 'Upload complete'}
+              </span>
+              <span className="text-zinc-400">{averageProgress}%</span>
+            </div>
+
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+              <div
+                className={`h-full transition-all duration-300 ${hasFailedUploads ? 'bg-red-500' : 'bg-purple-500'}`}
+                style={{ width: `${averageProgress}%` }}
+              />
+            </div>
+
+            <div className="pointer-events-none absolute bottom-full left-0 right-0 mb-2 max-h-56 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-2 opacity-0 shadow-2xl transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+              {uploadQueue.map((item) => (
+                <div key={item.clientId} className="mb-2 last:mb-0 rounded-lg border border-zinc-800 bg-zinc-950/70 p-2">
+                  <div className="mb-1 truncate text-xs font-medium text-zinc-200">{item.name}</div>
+                  <div className="mb-1 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                    <div
+                      className={`h-full transition-all duration-300 ${item.status === 'failed' ? 'bg-red-500' : 'bg-purple-500'}`}
+                      style={{ width: `${item.progress}%` }}
+                    />
+                  </div>
+                  <div className="text-[11px] text-zinc-400">
+                    {item.status === 'processing'
+                      ? 'Analyzing'
+                      : item.status === 'uploading'
+                        ? 'Uploading'
+                        : item.status === 'completed'
+                          ? 'Completed'
+                          : item.status === 'failed'
+                            ? item.errorMessage ?? 'Failed'
+                            : 'Queued'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </aside>
   )
 }

@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import axios from 'axios'
-import { LoaderCircle, UploadCloud, X } from 'lucide-react'
+import { UploadCloud, X } from 'lucide-react'
 import { apiClient, uploadClient } from '../api/client'
+
+export type UploadQueueStatus = 'queued' | 'uploading' | 'processing' | 'completed' | 'failed'
+
+export type UploadQueueUpdate = {
+  clientId: string
+  name: string
+  progress: number
+  status: UploadQueueStatus
+  errorMessage?: string
+}
 
 export type UploadedFileResponse = {
   id: string
@@ -15,14 +25,20 @@ export type UploadedFileResponse = {
 type UploadModalProps = {
   isOpen: boolean
   onClose: () => void
-  onUploadSuccess: (file: UploadedFileResponse) => void
+  onUploadSuccess: (file: UploadedFileResponse, targetFolderId: string | null) => void
+  onUploadQueueUpdate: (update: UploadQueueUpdate) => void
+  targetFolderId: string | null
 }
 
-export default function UploadModal({ isOpen, onClose, onUploadSuccess }: UploadModalProps) {
+export default function UploadModal({
+  isOpen,
+  onClose,
+  onUploadSuccess,
+  onUploadQueueUpdate,
+  targetFolderId,
+}: UploadModalProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const isMountedRef = useRef(false)
-  const [isUploading, setIsUploading] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
@@ -33,62 +49,160 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }: Upload
     }
   }, [])
 
+  useEffect(() => {
+    if (isOpen) {
+      setErrorMessage('')
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const openPicker = () => inputRef.current?.click()
 
-  const uploadFile = async (file: File) => {
-    if (isUploading) return
-
+  const uploadFile = async (file: File, clientId: string, selectedTargetFolderId: string | null) => {
     const formData = new FormData()
     formData.append('file', file)
+    const uploadStartedAt = Date.now()
+    let displayedUploadProgress = 0
 
-    setIsUploading(true)
-    setIsProcessing(false)
-    setErrorMessage('')
+    onUploadQueueUpdate({
+      clientId,
+      name: file.name,
+      progress: 0,
+      status: 'queued',
+    })
 
     try {
-      const response = await uploadClient.post<UploadedFileResponse>('/api/upload/', formData)
+      onUploadQueueUpdate({
+        clientId,
+        name: file.name,
+        progress: 5,
+        status: 'uploading',
+      })
+      displayedUploadProgress = 5
 
-      if (!isMountedRef.current) return
+      const response = await uploadClient.post<UploadedFileResponse>('/api/upload/', formData, {
+        onUploadProgress: (progressEvent) => {
+          const total = progressEvent.total ?? file.size
+          const loaded = progressEvent.loaded
+          const rawUploadRatio = total > 0 ? loaded / total : 0
 
-      setIsProcessing(true)
-      await apiClient.post('/api/process/', {
-        file_id: response.data.id,
-        file_path: response.data.file_path,
-        file_type: response.data.file_type,
+          // Stage model:
+          // 0-60%: network upload (byte-based, but time-gated to avoid instant jumps on tiny files)
+          // 60-99%: backend processing
+          const rawUploadProgress = 5 + rawUploadRatio * 55
+          const elapsedMs = Date.now() - uploadStartedAt
+          const timeGatedMax = Math.min(60, 5 + elapsedMs / 90)
+          const nextProgress = Math.min(rawUploadProgress, timeGatedMax)
+
+          displayedUploadProgress = Math.max(displayedUploadProgress, nextProgress)
+
+          onUploadQueueUpdate({
+            clientId,
+            name: file.name,
+            progress: Number(displayedUploadProgress.toFixed(1)),
+            status: 'uploading',
+          })
+        },
       })
 
       if (!isMountedRef.current) return
 
-      onUploadSuccess(response.data)
-      onClose()
+      const processingStartedAt = Date.now()
+      let processingProgress = Math.max(displayedUploadProgress, 60)
+      onUploadQueueUpdate({
+        clientId,
+        name: file.name,
+        progress: Number(processingProgress.toFixed(1)),
+        status: 'processing',
+      })
+
+      const processingPulse = window.setInterval(() => {
+        if (!isMountedRef.current) {
+          return
+        }
+
+        const elapsedMs = Date.now() - processingStartedAt
+        const dynamicCeiling = Math.min(99, 90 + elapsedMs / 1500)
+        const easeInBoost = Math.min(0.9, elapsedMs / 18000)
+        const baseStep = 0.12 + easeInBoost
+        const distanceFactor = Math.max(0.25, (dynamicCeiling - processingProgress) / 9)
+
+        processingProgress = Math.min(dynamicCeiling, processingProgress + baseStep * distanceFactor)
+
+        onUploadQueueUpdate({
+          clientId,
+          name: file.name,
+          progress: Number(processingProgress.toFixed(1)),
+          status: 'processing',
+        })
+      }, 450)
+
+      try {
+        await apiClient.post('/api/process/', {
+          file_id: response.data.id,
+          file_path: response.data.file_path,
+          file_type: response.data.file_type,
+        })
+      } finally {
+        window.clearInterval(processingPulse)
+      }
+
+      if (!isMountedRef.current) return
+
+      onUploadQueueUpdate({
+        clientId,
+        name: file.name,
+        progress: 100,
+        status: 'completed',
+      })
+      onUploadSuccess(response.data, selectedTargetFolderId)
     } catch (error: unknown) {
       if (!isMountedRef.current) return
 
       const detail = axios.isAxiosError(error) ? error.response?.data?.detail : undefined
-      setErrorMessage(typeof detail === 'string' ? detail : 'Upload failed. Please try again.')
-    } finally {
-      if (isMountedRef.current) {
-        setIsUploading(false)
-        setIsProcessing(false)
-      }
+      const normalizedError = typeof detail === 'string' ? detail : 'Upload failed. Please try again.'
+      setErrorMessage(normalizedError)
+      onUploadQueueUpdate({
+        clientId,
+        name: file.name,
+        progress: 100,
+        status: 'failed',
+        errorMessage: normalizedError,
+      })
     }
   }
 
+  const startUploads = (files: FileList | File[]) => {
+    const selectedFiles = Array.from(files)
+    if (selectedFiles.length === 0) {
+      return
+    }
+
+    setErrorMessage('')
+    const selectedTargetFolderId = targetFolderId
+
+    onClose()
+
+    void Promise.allSettled(
+      selectedFiles.map(async (file) => {
+        const clientId = crypto.randomUUID()
+        await uploadFile(file, clientId, selectedTargetFolderId)
+      }),
+    )
+  }
+
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      void uploadFile(file)
+    if (event.target.files && event.target.files.length > 0) {
+      startUploads(event.target.files)
     }
     event.target.value = ''
   }
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault()
-    const file = event.dataTransfer.files?.[0]
-    if (file) {
-      void uploadFile(file)
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      startUploads(event.dataTransfer.files)
     }
   }
 
@@ -116,32 +230,20 @@ export default function UploadModal({ isOpen, onClose, onUploadSuccess }: Upload
           }}
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleDrop}
-          className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-14 text-center transition ${
-            isUploading ? 'border-purple-500/40 bg-zinc-900/80' : 'border-zinc-700 hover:border-zinc-500'
-          }`}
+          className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-zinc-700 px-6 py-14 text-center transition hover:border-zinc-500"
         >
           <div className="rounded-full bg-zinc-800 p-4">
-            {isUploading ? (
-              <LoaderCircle className="h-8 w-8 animate-spin text-purple-400" />
-            ) : (
-              <UploadCloud className="h-8 w-8 text-purple-400" />
-            )}
+            <UploadCloud className="h-8 w-8 text-purple-400" />
           </div>
-          <div className="text-lg font-semibold text-white">
-            {isProcessing
-              ? 'Analyzing document with AI... this may take a minute.'
-              : isUploading
-                ? 'Uploading... Please wait'
-                : 'Click to upload or drag and drop'}
-          </div>
-          <div className="text-sm text-zinc-400">PDF, MP4, MP3 up to 50MB</div>
+          <div className="text-lg font-semibold text-white">Click to upload or drag and drop</div>
+          <div className="text-sm text-zinc-400">PDF, MP4, MP3 up to 50MB. Multiple files supported.</div>
           {errorMessage ? <div className="max-w-sm text-sm text-red-400">{errorMessage}</div> : null}
           <input
             ref={inputRef}
             type="file"
             className="hidden"
             accept=".pdf,video/*,audio/*"
-            multiple={false}
+            multiple
             onChange={handleChange}
           />
         </div>

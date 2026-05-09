@@ -3,6 +3,7 @@ import type { FileSystemItem } from './types'
 import ChatView from './ChatView'
 import SummaryView from './SummaryView'
 import MediaPlayer from './MediaPlayer'
+import { buildUploadUrl } from '../api/client'
 
 type MainAreaProps = {
   activeFile: FileSystemItem | null
@@ -21,7 +22,7 @@ export default function MainArea({ activeFile, mode, onModeChange, currentSeekTi
   let fileUrl = ''
   if (activeFile) {
     const stored = activeFile.filePath ? (activeFile.filePath.split(/[\\/]/).pop() ?? activeFile.name) : activeFile.name
-    fileUrl = `http://localhost:8000/uploads/${encodeURIComponent(stored)}`
+    fileUrl = buildUploadUrl(stored)
   }
 
   return (

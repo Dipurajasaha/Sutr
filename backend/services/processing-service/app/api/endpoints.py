@@ -130,7 +130,7 @@ async def process_file(request: ProcessRequest, db: AsyncSession = Depends(get_d
         try:
             async with httpx.AsyncClient() as client:
                 summary_response = await client.post(
-                    f"{settings.SUMMARY_SERVICE_URL}/api/v1/summary/generate",
+                    f"{settings.SUMMARY_SERVICE_URL}/api/v1/summary/generate/",
                     json={
                         "file_id": str(request.file_id),
                         "summary_type": "quick",

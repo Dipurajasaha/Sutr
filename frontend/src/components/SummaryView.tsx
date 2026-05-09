@@ -51,7 +51,7 @@ export default function SummaryView({ activeFile }: SummaryViewProps) {
     setSummaryData('')
 
     try {
-      const response = await apiClient.post<SummaryResponse>('http://localhost:8006/api/v1/summary/generate', {
+      const response = await apiClient.post<SummaryResponse>('/api/summary/generate', {
         file_id: activeFile.id,
         summary_type: type,
       })

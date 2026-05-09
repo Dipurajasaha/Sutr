@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import MainArea from './components/MainArea'
 import Sidebar from './components/Sidebar'
-import UploadModal, { type UploadedFileResponse } from './components/UploadModal'
+import UploadModal, {
+  type UploadQueueStatus,
+  type UploadQueueUpdate,
+  type UploadedFileResponse,
+} from './components/UploadModal'
 import { apiClient } from './api/client'
 import type { FileSystemItem } from './components/types'
 
@@ -20,6 +24,15 @@ type BackendFile = {
   file_path: string
   status: string
   created_at: string
+}
+
+export type UploadQueueItem = {
+  clientId: string
+  name: string
+  progress: number
+  status: UploadQueueStatus
+  errorMessage?: string
+  updatedAt: number
 }
 
 function removeItemRecursive(items: FileSystemItem[], targetId: string): FileSystemItem[] {
@@ -91,6 +104,7 @@ export default function App() {
   const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | null>(null)
   const [mode, setMode] = useState<'chat' | 'summary'>('chat')
   const [currentSeekTime, setCurrentSeekTime] = useState<number>(0)
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([])
 
   useEffect(() => {
     setCurrentSeekTime(0)
@@ -122,7 +136,7 @@ export default function App() {
     void fetchFiles()
   }, [])
 
-  const handleUploadSuccess = (uploadedFile: UploadedFileResponse) => {
+  const handleUploadSuccess = (uploadedFile: UploadedFileResponse, targetFolderId: string | null) => {
     const newFile: FileSystemItem = {
       id: uploadedFile.id,
       name: uploadedFile.filename,
@@ -132,20 +146,56 @@ export default function App() {
     }
 
     setTree((prev) => {
-      if (!uploadTargetFolderId) {
+      if (!targetFolderId) {
         return [newFile, ...prev]
       }
 
-      if (!hasFolderRecursive(prev, uploadTargetFolderId)) {
+      if (!hasFolderRecursive(prev, targetFolderId)) {
         return [newFile, ...prev]
       }
 
-      return insertFileIntoFolderRecursive(prev, uploadTargetFolderId, newFile)
+      return insertFileIntoFolderRecursive(prev, targetFolderId, newFile)
     })
     setActiveFile(newFile)
-    setUploadTargetFolderId(null)
-    setIsUploadModalOpen(false)
   }
+
+  const handleUploadQueueUpdate = (update: UploadQueueUpdate) => {
+    const now = Date.now()
+    setUploadQueue((prev) => {
+      const existingIndex = prev.findIndex((item) => item.clientId === update.clientId)
+      const nextItem: UploadQueueItem = {
+        clientId: update.clientId,
+        name: update.name,
+        progress: update.progress,
+        status: update.status,
+        errorMessage: update.errorMessage,
+        updatedAt: now,
+      }
+
+      if (existingIndex === -1) {
+        return [...prev, nextItem]
+      }
+
+      return prev.map((item, index) => (index === existingIndex ? nextItem : item))
+    })
+  }
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const now = Date.now()
+      setUploadQueue((prev) =>
+        prev.filter((item) => {
+          if (item.status !== 'completed') {
+            return true
+          }
+
+          return now - item.updatedAt < 5000
+        }),
+      )
+    }, 1000)
+
+    return () => window.clearInterval(interval)
+  }, [])
 
   function mapBackendFileType(fileType: string): 'pdf' | 'video' | 'audio' {
     if (fileType === 'video') return 'video'
@@ -210,6 +260,7 @@ export default function App() {
           onDeleteFile={handleDeleteFile}
           onRenameFile={handleRenameFile}
           isLoadingFiles={isLoadingFiles}
+          uploadQueue={uploadQueue}
         />
       </div>
 
@@ -230,6 +281,8 @@ export default function App() {
           setIsUploadModalOpen(false)
         }}
         onUploadSuccess={handleUploadSuccess}
+        onUploadQueueUpdate={handleUploadQueueUpdate}
+        targetFolderId={uploadTargetFolderId}
       />
     </div>
   )

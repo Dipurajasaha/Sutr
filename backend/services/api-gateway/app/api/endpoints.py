@@ -107,7 +107,7 @@ async def gateway_delete_file_vectors(file_id: str):
 @router.post("/summary/generate/")
 async def gateway_generate_summary(request: Request):
     payload = await request.json()
-    primary_url = f"{settings.SUMMARY_SERVICE_URL}/api/v1/summary/generate"
+    primary_url = f"{settings.SUMMARY_SERVICE_URL}/api/v1/summary/generate/"
     print(f"[gateway-summary] primary_url={primary_url}")
     try:
         return await forward_request("POST", primary_url, payload=payload)
@@ -115,7 +115,7 @@ async def gateway_generate_summary(request: Request):
         # -- fallback for stale SUMMARY_SERVICE_URL values in long-lived environments --
         if e.status_code != 404:
             raise
-        fallback_url = "http://localhost:8006/api/v1/summary/generate"
+        fallback_url = "http://localhost:8006/api/v1/summary/generate/"
         print(f"[gateway-summary] fallback_url={fallback_url}")
         return await forward_request("POST", fallback_url, payload=payload)
 
