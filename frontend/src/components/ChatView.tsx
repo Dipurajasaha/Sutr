@@ -205,9 +205,9 @@ export default function ChatView({ activeFile, onCitationClick }: ChatViewProps)
                 <div className="rounded-2xl border-l-2 border-purple-500/80 bg-zinc-950 px-4 py-3">
                   <div className="flex items-center gap-2">
                     <div className="flex gap-1">
-                      <div className="h-2 w-2 rounded-full bg-purple-400 animate-pulse" />
-                      <div className="h-2 w-2 rounded-full bg-purple-400 animate-pulse animation-delay-100" />
-                      <div className="h-2 w-2 rounded-full bg-purple-400 animate-pulse animation-delay-200" />
+                      <div className="h-2 w-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '-0.3s' }} />
+                      <div className="h-2 w-2 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '-0.15s' }} />
+                      <div className="h-2 w-2 rounded-full bg-purple-400 animate-bounce" />
                     </div>
                     <span className="text-xs text-purple-400">AI is thinking...</span>
                   </div>
@@ -231,7 +231,7 @@ export default function ChatView({ activeFile, onCitationClick }: ChatViewProps)
         )}
       </div>
 
-      <div className="shrink-0 border-t border-zinc-800 bg-zinc-950 px-6 py-5">
+      <div className="shrink-0 bg-zinc-950/70 px-6 py-5 backdrop-blur-md border-t border-zinc-800/50">
         <div className="mx-auto max-w-4xl">
           <form onSubmit={handleSubmit} className="relative">
             <input

@@ -1,11 +1,10 @@
 import { ChevronRight, ChevronDown, Folder, MoreVertical, Trash2, Edit3 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FileSystemItem } from './types'
 
 type FolderNodeProps = {
   item: FileSystemItem
   depth: number
-  isSelected: boolean
   onSelect: (id: string) => void
   onToggle: (id: string) => void
   onMoveSelectedFileHere: (folderId: string) => void
@@ -17,7 +16,6 @@ type FolderNodeProps = {
 export default function FolderNode({
   item,
   depth,
-  isSelected,
   onSelect,
   onToggle,
   onMoveSelectedFileHere,
@@ -27,29 +25,45 @@ export default function FolderNode({
 }: FolderNodeProps) {
   const [isHovering, setIsHovering] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const actionsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showMenu) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (actionsRef.current?.contains(event.target as Node)) {
+        return
+      }
+
+      setShowMenu(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+    }
+  }, [showMenu])
 
   return (
     <div
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => {
         setIsHovering(false)
-        setShowMenu(false)
       }}
-      className="relative"
+      className="group relative"
     >
       <div
         onClick={() => onSelect(item.id)}
         style={{ paddingLeft: `${depth * 1 + 0.75}rem` }}
-        className={`flex w-full cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-left transition-none ${
-          isSelected
-            ? 'border-fuchsia-500 bg-zinc-800 text-purple-400'
-            : 'border-transparent text-zinc-300 hover:bg-zinc-800/50'
-        }`}
+        className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 py-2 text-left text-zinc-400 transition-all duration-200 hover:border-zinc-700/70 hover:bg-zinc-800/25 hover:text-zinc-200"
       >
         <button
           type="button"
           onClick={() => onToggle(item.id)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded hover:bg-zinc-700"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-zinc-700/50"
           aria-label={item.isOpen ? 'Collapse folder' : 'Expand folder'}
         >
           {item.isOpen ? (
@@ -59,21 +73,21 @@ export default function FolderNode({
           )}
         </button>
 
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center">
-          <Folder className="h-4 w-4 text-zinc-400" />
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center transition-transform duration-200 group-hover:scale-105">
+          <Folder className="h-4 w-4 text-zinc-500" />
         </div>
 
-        <div className="min-w-0 flex-1 max-w-45 truncate text-sm font-medium">{item.name}</div>
+        <div className="min-w-0 flex-1 truncate text-sm font-medium">{item.name}</div>
 
-        {isHovering && (
-          <div className="relative ml-auto">
+        {(isHovering || showMenu) && (
+          <div ref={actionsRef} className="relative ml-auto">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                setShowMenu(!showMenu)
+                setShowMenu((current) => !current)
               }}
-              className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:bg-zinc-700 hover:text-white"
+              className="flex h-6 w-6 items-center justify-center rounded text-zinc-500 transition-colors duration-200 hover:bg-zinc-700/50 hover:text-zinc-300"
               aria-label="More options"
             >
               <MoreVertical className="h-4 w-4" />

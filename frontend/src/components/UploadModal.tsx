@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent } from 'react'
 import axios from 'axios'
-import { UploadCloud, X } from 'lucide-react'
+import { UploadCloud } from 'lucide-react'
 import { apiClient, uploadClient } from '../api/client'
 
 export type UploadQueueStatus = 'queued' | 'uploading' | 'processing' | 'completed' | 'failed'
@@ -39,6 +39,8 @@ export default function UploadModal({
 }: UploadModalProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const isMountedRef = useRef(false)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  const [isVisible, setIsVisible] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
@@ -52,6 +54,14 @@ export default function UploadModal({
   useEffect(() => {
     if (isOpen) {
       setErrorMessage('')
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    // Trigger mount animation after the component renders
+    setIsVisible(false)
+    if (isOpen) {
+      requestAnimationFrame(() => setIsVisible(true))
     }
   }, [isOpen])
 
@@ -207,16 +217,26 @@ export default function UploadModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-      <div className="relative w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl shadow-black/40">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 rounded-lg p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-          aria-label="Close upload modal"
-        >
-          <X className="h-5 w-5" />
-        </button>
+    <div
+      ref={overlayRef}
+      onMouseDown={(e) => {
+        if (e.target === overlayRef.current) {
+          onClose()
+        }
+      }}
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 transition-opacity duration-300 ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      <div
+        className={`relative w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl shadow-black/40 modal-enter transform ${
+          isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-6 scale-95'
+        }`}
+      >
+        {/* subtle purple glow behind modal */}
+        <div className="absolute -inset-2 rounded-2xl modal-glow pointer-events-none" style={{ zIndex: -1 }} />
+
+        
 
         <div
           role="button"
@@ -230,10 +250,11 @@ export default function UploadModal({
           }}
           onDragOver={(event) => event.preventDefault()}
           onDrop={handleDrop}
-          className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-zinc-700 px-6 py-14 text-center transition hover:border-zinc-500"
+          className="relative flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-zinc-700 px-6 py-14 text-center transition hover:border-zinc-500"
         >
-          <div className="rounded-full bg-zinc-800 p-4">
-            <UploadCloud className="h-8 w-8 text-purple-400" />
+          <div className="relative rounded-full bg-zinc-800 p-4">
+            <span className="absolute -inset-2 rounded-full bg-linear-to-r from-purple-600/40 to-pink-500/10 blur-2xl opacity-30"></span>
+            <UploadCloud className="h-8 w-8 text-purple-400 relative" />
           </div>
           <div className="text-lg font-semibold text-white">Click to upload or drag and drop</div>
           <div className="text-sm text-zinc-400">PDF, MP4, MP3 up to 50MB. Multiple files supported.</div>

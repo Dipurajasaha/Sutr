@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import { FileText, AlertCircle, Zap } from 'lucide-react'
 import { apiClient } from '../api/client'
@@ -41,6 +41,10 @@ export default function SummaryView({ activeFile }: SummaryViewProps) {
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string>('')
   const [summaryType, setSummaryType] = useState<'short' | 'detailed'>('short')
+  const toggleRef = useRef<HTMLDivElement | null>(null)
+  const quickButtonRef = useRef<HTMLButtonElement | null>(null)
+  const detailedButtonRef = useRef<HTMLButtonElement | null>(null)
+  const [indicatorStyle, setIndicatorStyle] = useState<{ left: number; width: number } | null>(null)
 
   const generateSummary = async (type: 'short' | 'detailed') => {
     if (!isFile || !activeFile) return
@@ -73,6 +77,28 @@ export default function SummaryView({ activeFile }: SummaryViewProps) {
     }
   }
 
+  useLayoutEffect(() => {
+    const updateIndicator = () => {
+      const containerRect = toggleRef.current?.getBoundingClientRect()
+      const activeButton = summaryType === 'short' ? quickButtonRef.current : detailedButtonRef.current
+      const buttonRect = activeButton?.getBoundingClientRect()
+
+      if (!containerRect || !buttonRect) {
+        return
+      }
+
+      setIndicatorStyle({
+        left: buttonRect.left - containerRect.left,
+        width: buttonRect.width,
+      })
+    }
+
+    updateIndicator()
+    window.addEventListener('resize', updateIndicator)
+
+    return () => window.removeEventListener('resize', updateIndicator)
+  }, [summaryType])
+
 
 
   return (
@@ -84,29 +110,32 @@ export default function SummaryView({ activeFile }: SummaryViewProps) {
               <FileText className="h-5 w-5" />
               <span className="text-sm font-semibold uppercase tracking-[0.22em]">Summary Report</span>
             </div>
-            <div className="flex gap-2">
+            <div ref={toggleRef} className="relative inline-flex rounded-full border border-zinc-700 bg-zinc-900 p-1">
+              <div
+                className="absolute top-1 h-[calc(100%-0.5rem)] rounded-full bg-purple-600 shadow-[0_0_0_1px_rgba(168,85,247,0.18),0_10px_24px_rgba(147,51,234,0.28)] transition-[left,width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                style={{
+                  left: indicatorStyle ? `${indicatorStyle.left}px` : '0.25rem',
+                  width: indicatorStyle ? `${indicatorStyle.width}px` : '0px',
+                }}
+              />
               <button
+                ref={quickButtonRef}
                 type="button"
                 onClick={() => generateSummary('short')}
                 disabled={isGenerating}
-                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  summaryType === 'short'
-                    ? 'bg-purple-600 text-white'
-                    : 'border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
-                } disabled:opacity-50`}
+                className="relative z-10 inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors duration-300 disabled:cursor-wait"
+                style={{ color: summaryType === 'short' ? 'white' : '#d4d4d8' }}
               >
                 <Zap className="h-3.5 w-3.5" />
                 Quick Summary
               </button>
               <button
+                ref={detailedButtonRef}
                 type="button"
                 onClick={() => generateSummary('detailed')}
                 disabled={isGenerating}
-                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  summaryType === 'detailed'
-                    ? 'bg-purple-600 text-white'
-                    : 'border border-zinc-700 bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
-                } disabled:opacity-50`}
+                className="relative z-10 inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium transition-colors duration-300 disabled:cursor-wait"
+                style={{ color: summaryType === 'detailed' ? 'white' : '#d4d4d8' }}
               >
                 <FileText className="h-3.5 w-3.5" />
                 Detailed Notes

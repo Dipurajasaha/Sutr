@@ -257,7 +257,7 @@ end_time: float (optional)
 
 ---
 
-## � Docker & Containerization
+## 🐳 Docker & Containerization
 
 Sutr is fully containerized with production-ready Docker support, including GPU acceleration for AI workloads.
 
@@ -311,80 +311,126 @@ LONGCAT_API_KEY=your_key_here
 - `postgres_data` → PostgreSQL persistence
 - `uploads` → Shared file storage across services
 
-### Quick Start & Common Commands
-
-```bash
-# Start all services
-docker compose up -d --build
-
-# View status and logs
-docker compose ps
-docker compose logs -f                    # All services
-docker compose logs -f <service-name>      # Specific service
-
-# Restart and manage
-docker compose up -d --build <service-name>  # Rebuild one service
-docker compose down -v && docker compose up -d --build  # Clean restart
-
-# Verify services
-curl http://localhost:8000/api/files/     # Check API Gateway
-docker compose exec processing-service nvidia-smi  # Check GPU
-```
-
-### Production Deployment Checklist
-
-- [ ] Update `.env` with production URLs and API keys
-- [ ] Change `allow_origins` to specific domain (not `["*"]`)
-- [ ] Use external PostgreSQL for data durability
-- [ ] Use secrets management (Docker Secrets, AWS Secrets Manager, etc.)
-- [ ] Enable logging to centralized system (ELK, CloudWatch, etc.)
-- [ ] Configure health checks for orchestration (Kubernetes, ECS)
 
 ---
 
-## 🛠️ How to Run Locally (Manual Setup)
+# 🛠️ How to Run Locally
 
-If you prefer running services directly without Docker (not recommended - Docker setup above is simpler):
+Quick, copy-paste instructions for the two common local workflows: a Windows quick-dev flow using `start_dev.bat`, and a reproducible containerized flow using Docker Compose.
 
-### Prerequisites
-- Python 3.11+
-- PostgreSQL 14+ (running locally)
-- Node.js 20+ (for frontend)
-- ~4GB RAM
+Prerequisites
+- Node.js 20+ (frontend)
+- Python 3.11+ (for running services locally)
+- Docker & Docker Compose (recommended)
 
-### 1. Start PostgreSQL
-```bash
-psql -U postgres -c "CREATE DATABASE sutr_db;"
+Prepare environment
+1. Copy the example `.env` and edit required secrets and URLs:
+
+```powershell
+copy .env.example .env
+# Edit .env: set LONGCAT_API_KEY and DATABASE_URL
 ```
 
-### 2. Activate Virtual Environment
-```bash
-source venv/bin/activate  # macOS/Linux
-.\venv\Scripts\Activate.ps1  # Windows
+## Option A — Windows quick dev (start_dev.bat)
+- Purpose: fast, local development with auto-reload for Python services.
+
+Steps
+1. Create and activate a virtual environment (one-time):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-### 3. Run Each Service
-```bash
-cd backend/services/<service-name>
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port <port>
+2. Install shared backend dependencies:
+
+```powershell
+pip install -r backend/base-requirements.txt
 ```
 
-**Service Ports:** Gateway (8000) | Upload (8001) | Processing (8002) | Media (8003) | Vector (8004) | Summary (8005) | Chat (8006)
+3. Start the local dev environment (opens service windows):
 
-### 4. Start Frontend
+```powershell
+.\start_dev.bat
+```
+
+Stopping
+- Close the `start_dev.bat` window or press `CTRL+C`.
+
+Notes
+- `start_dev.bat` runs services with `uvicorn --reload` for code reloading.
+- Use the opened service windows to view logs and run service-specific commands.
+
+## Option B — Docker Compose (recommended)
+- Purpose: run the complete stack in containers with one command.
+
+Prerequisites
+- Docker Desktop, or Docker Engine + Docker Compose, is installed and running.
+- A `.env` file exists at the repository root.
+- Ports `8000` and `5173` are free.
+
+Step 1. Create or update `.env`
+
+```bash
+cp .env.example .env
+# Edit .env and set LONGCAT_API_KEY, DATABASE_URL, and any local overrides
+```
+
+Step 2. Build and start the stack
+
+```bash
+docker compose up -d --build
+```
+
+Step 3. Confirm the services are running
+
+```bash
+docker compose ps
+docker compose logs -f api-gateway
+```
+
+Step 4. Verify the app is reachable
+
+```bash
+curl http://localhost:8000/api/files/
+```
+
+Open the frontend in your browser:
+- Windows: `start http://localhost:5173`
+- Linux: `xdg-open http://localhost:5173`
+
+Step 5. Use quick restart commands when iterating
+
+```bash
+docker compose stop
+docker compose start
+docker compose restart api-gateway
+docker compose up -d --build api-gateway
+```
+
+Step 6. Shut everything down when finished
+
+```bash
+docker compose down -v
+```
+
+Optional: frontend only
+
 ```bash
 cd frontend
 npm install
-npm run dev  # Runs on http://localhost:5173
+npm run dev
 ```
 
-### 5. Verify
-```bash
-curl http://localhost:8000/api/files/  # Should return: []
-```
+Troubleshooting
+- If a service fails to start, inspect logs with `docker compose logs <service>`.
+- If the API cannot connect to Postgres, confirm `DATABASE_URL` in `.env` points to `postgres` when using Docker Compose.
+- If you change Python dependencies for local venv development, re-run `pip install -r backend/base-requirements.txt`.
 
 ---
+
+
+
 
 ## 🧪 Testing
 
@@ -410,28 +456,3 @@ pytest -v --cov=app --cov-report=html
 
 ---
 
-## 🔄 Service Dependencies
-
-```
-Frontend (React)
-   ↓
-API Gateway (8000)
-   ├→ Upload Service (8001)
-   ├→ Processing Service (8002)
-   │   └→ Vector Service (8005)
-   │   └→ Summary Service (8006)
-   ├→ Chat Service (8004)
-   │   └→ Vector Service (8005)
-   ├→ Vector Service (8005)
-   ├→ Summary Service (8006)
-   ├→ Media Service (8007)
-   └→ PostgreSQL (shared across services)
-```
-
----
-
-## 📦 Deployment
-
-Each service is independently deployable as a containerized unit. See `docker-compose.yml` for local dev setup and adapt for production environments (Kubernetes, ECS, etc.).
-
----

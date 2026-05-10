@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
+import type { RefObject } from 'react'
 import { useEffect, useState } from 'react'
-import { FolderPlus, UploadCloud, Loader } from 'lucide-react'
+import { FolderPlus, UploadCloud, Loader, Inbox, Search } from 'lucide-react'
 import FolderNode from './FolderNode'
 import FileNode from './FileNode'
 import type { FileSystemItem } from './types'
@@ -24,6 +25,7 @@ type SidebarProps = {
   onRenameFile: (fileId: string, newName: string) => Promise<void>
   isLoadingFiles?: boolean
   uploadQueue: UploadQueueItem[]
+  logoAnchorRef?: RefObject<HTMLDivElement | null>
 }
 
 export default function Sidebar({
@@ -36,6 +38,7 @@ export default function Sidebar({
   onRenameFile,
   isLoadingFiles = false,
   uploadQueue,
+  logoAnchorRef,
 }: SidebarProps) {
   const toggleFolder = (id: string) => {
     setTree((prev) => toggleFolderRecursive(prev, id))
@@ -177,6 +180,7 @@ export default function Sidebar({
   const [deleteTargetType, setDeleteTargetType] = useState<'file' | 'folder' | null>(null)
   const [uiMessage, setUiMessage] = useState<string>('')
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState<string>('')
 
   const renameItem = (id: string, currentName: string) => {
     setRenameTargetId(id)
@@ -303,7 +307,6 @@ export default function Sidebar({
     }
   }, [tree, selectedFolderId])
 
-  const selectedFolder = selectedFolderId ? findItemByIdRecursive(tree, selectedFolderId) : null
   const activeUploads = uploadQueue.filter(
     (item) => item.status === 'queued' || item.status === 'uploading' || item.status === 'processing',
   )
@@ -314,15 +317,33 @@ export default function Sidebar({
       ? Math.round(uploadPanelItems.reduce((sum, item) => sum + item.progress, 0) / uploadPanelItems.length)
       : 0
 
+  const filteredTree = (items: FileSystemItem[]): FileSystemItem[] => {
+    if (!searchQuery.trim()) return items
+    return items.filter((item) => {
+      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
+      if (item.type === 'folder' && item.children) {
+        const hasMatchingChildren = filteredTree(item.children).length > 0
+        return matchesSearch || hasMatchingChildren
+      }
+      return matchesSearch
+    })
+  }
+
+  const sortedItems = (items: FileSystemItem[]): FileSystemItem[] => {
+    const folders = items.filter((item) => item.type === 'folder').sort((a, b) => a.name.localeCompare(b.name))
+    const files = items.filter((item) => item.type === 'file').sort((a, b) => a.name.localeCompare(b.name))
+    return [...folders, ...files]
+  }
+
   const renderTree = (items: FileSystemItem[], depth: number = 0) => {
-    return items.map((item) => {
+    const filtered = filteredTree(items)
+    return sortedItems(filtered).map((item) => {
       if (item.type === 'folder') {
         return (
           <div key={item.id}>
             <FolderNode
               item={item}
               depth={depth}
-              isSelected={selectedFolderId === item.id}
               onSelect={selectFolder}
               onToggle={toggleFolder}
               onMoveSelectedFileHere={moveSelectedFileIntoFolder}
@@ -356,12 +377,14 @@ export default function Sidebar({
   return (
     <aside className="flex h-full w-full min-h-0 flex-col border-r border-zinc-800 bg-zinc-900 text-white">
       <div className="space-y-3 p-5">
-        <div className="text-2xl font-bold tracking-tight text-white">Sutr AI</div>
+        <div ref={logoAnchorRef} className="text-2xl font-bold tracking-tight text-white leading-none">
+          Sutr AI
+        </div>
 
         <button
           type="button"
           onClick={() => onOpenUpload(selectedFolderId ?? undefined)}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-purple-600 px-4 py-3 font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-purple-600 px-4 py-3 font-semibold text-white shadow-[0_10px_30px_rgba(168,85,247,0.18)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-purple-500 hover:shadow-[0_14px_36px_rgba(168,85,247,0.24)] active:translate-y-0 disabled:opacity-50"
           disabled={isLoadingFiles}
         >
           <UploadCloud className="h-4 w-4" />
@@ -374,15 +397,12 @@ export default function Sidebar({
             setUiMessage('')
             setCreateFolderOpen(true)
           }}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-3 font-semibold text-zinc-300 hover:bg-zinc-700 hover:text-white"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-800 px-4 py-3 font-semibold text-zinc-300 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-600 hover:bg-zinc-700 hover:text-white active:translate-y-0"
         >
           <FolderPlus className="h-4 w-4" />
           + New Folder
         </button>
 
-        {selectedFolder?.type === 'folder' ? (
-          <p className="text-xs text-zinc-400">Target folder: {selectedFolder.name}</p>
-        ) : null}
         {uiMessage ? <p className="text-xs text-red-400">{uiMessage}</p> : null}
       </div>
       
@@ -415,20 +435,37 @@ export default function Sidebar({
         onConfirm={confirmDeleteItem}
       />
 
-      <div className="px-3 pb-3 text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
-        Files & Folders
+      <div className="space-y-3 px-3 pb-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search documents..."
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 py-2 pl-10 pr-3 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+          />
+        </div>
+        <div className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+          Document Manager
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-4">
+      <div className="relative z-10 flex-1 overflow-y-auto px-2 pb-4 pt-2">
         {isLoadingFiles ? (
           <div className="flex items-center justify-center gap-2 py-8 text-zinc-500">
             <Loader className="h-4 w-4 animate-spin" />
             <span>Loading files...</span>
           </div>
         ) : tree.length === 0 ? (
-          <div className="py-8 text-center text-zinc-500">
-            <p>No files yet</p>
-            <p className="mt-2 text-xs">Upload a file to get started</p>
+          <div className="flex min-h-72 flex-col items-center justify-center px-6 py-10 text-center">
+            <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-3xl border border-zinc-800 bg-zinc-900/80 shadow-[0_0_0_1px_rgba(39,39,42,0.6)]">
+              <Inbox className="h-10 w-10 text-zinc-600" />
+            </div>
+            <p className="text-lg font-medium text-zinc-300">It&apos;s quiet in here...</p>
+            <p className="mt-2 max-w-xs text-sm text-zinc-500">
+              Upload or Select a document, audio, or video file to get started.
+            </p>
           </div>
         ) : (
           <div className="space-y-1">{renderTree(tree)}</div>
@@ -437,7 +474,7 @@ export default function Sidebar({
 
       {uploadQueue.length > 0 ? (
         <div className="border-t border-zinc-800 p-3">
-          <div className="group relative rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
+          <div className="group relative rounded-xl border border-zinc-800 bg-zinc-950/70 p-3 transition-colors duration-200 hover:border-zinc-700 hover:bg-zinc-950">
             <div className="mb-2 flex items-center justify-between gap-3 text-xs">
               <span className="font-medium text-zinc-200">
                 {activeUploads.length > 0
@@ -458,7 +495,10 @@ export default function Sidebar({
 
             <div className="pointer-events-none absolute bottom-full left-0 right-0 mb-2 max-h-56 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-2 opacity-0 shadow-2xl transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
               {uploadQueue.map((item) => (
-                <div key={item.clientId} className="mb-2 last:mb-0 rounded-lg border border-zinc-800 bg-zinc-950/70 p-2">
+                <div
+                  key={item.clientId}
+                  className="mb-2 last:mb-0 rounded-lg border border-zinc-800 bg-zinc-950/70 p-2 transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900"
+                >
                   <div className="mb-1 truncate text-xs font-medium text-zinc-200">{item.name}</div>
                   <div className="mb-1 h-1.5 overflow-hidden rounded-full bg-zinc-800">
                     <div

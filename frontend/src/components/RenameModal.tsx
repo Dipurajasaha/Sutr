@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type RenameModalProps = {
   isOpen: boolean
@@ -27,6 +27,8 @@ export default function RenameModal({
 }: RenameModalProps) {
   const [value, setValue] = useState(currentName)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isVisible, setIsVisible] = useState(false)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (isOpen) {
@@ -34,11 +36,26 @@ export default function RenameModal({
     }
   }, [isOpen, currentName])
 
+  useEffect(() => {
+    setIsVisible(false)
+    if (isOpen) {
+      requestAnimationFrame(() => setIsVisible(true))
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+    <div
+      ref={overlayRef}
+      onMouseDown={(e) => {
+        if (e.target === overlayRef.current) onClose()
+      }}
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
+    >
+      <div className={`w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 transform transition-all duration-300 ${isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-4 scale-95'}`}>
+        <div className="absolute -inset-2 rounded-xl modal-glow pointer-events-none" style={{ zIndex: -1 }} />
+
         <h3 className="mb-3 text-lg font-medium">{title}</h3>
 
         {message ? <p className="mb-3 text-sm text-zinc-300">{message}</p> : null}

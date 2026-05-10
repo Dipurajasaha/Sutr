@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import MainArea from './components/MainArea'
 import Sidebar from './components/Sidebar'
 import UploadModal, {
@@ -96,6 +96,72 @@ function insertFileIntoFolderRecursive(items: FileSystemItem[], folderId: string
   })
 }
 
+function ScrambleSubtitle() {
+  const text = 'Unlock the knowledge inside your documents, audio, and video.'
+  const scrambleChars = '!<>-_\\/[]{}—=+*^?#________'
+
+  const [displayedText, setDisplayedText] = useState('')
+
+  useEffect(() => {
+    const revealIntervalMs = Math.max(30, Math.floor(1800 / text.length))
+    const holdTimeoutMs = 3000
+    let revealIndex = 0
+    let holdTimeoutId: number | null = null
+
+    const buildScrambledText = (lockedCount: number) => {
+      return text
+        .split('')
+        .map((char, index) => {
+          if (char === ' ') {
+            return ' '
+          }
+
+          if (index < lockedCount) {
+            return char
+          }
+
+          return scrambleChars[Math.floor(Math.random() * scrambleChars.length)]
+        })
+        .join('')
+    }
+
+    setDisplayedText(buildScrambledText(0))
+
+    const intervalId = window.setInterval(() => {
+      revealIndex += 1
+
+      if (revealIndex >= text.length) {
+        window.clearInterval(intervalId)
+        setDisplayedText(text)
+
+        holdTimeoutId = window.setTimeout(() => {
+          holdTimeoutId = null
+        }, holdTimeoutMs)
+
+        return
+      }
+
+      setDisplayedText(buildScrambledText(revealIndex))
+    }, revealIntervalMs)
+
+    return () => {
+      window.clearInterval(intervalId)
+
+      if (holdTimeoutId !== null) {
+        window.clearTimeout(holdTimeoutId)
+      }
+    }
+  }, [])
+
+  return (
+    <p className="mt-6 mb-8 px-4 text-lg leading-relaxed text-zinc-300">
+      <span className="inline-block whitespace-pre-wrap font-mono tracking-[0.14em] text-zinc-200">
+        {displayedText}
+      </span>
+    </p>
+  )
+}
+
 export default function App() {
   const [activeFile, setActiveFile] = useState<FileSystemItem | null>(null)
   const [tree, setTree] = useState<FileSystemItem[]>([])
@@ -105,10 +171,59 @@ export default function App() {
   const [mode, setMode] = useState<'chat' | 'summary'>('chat')
   const [currentSeekTime, setCurrentSeekTime] = useState<number>(0)
   const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([])
+  const [hasStarted, setHasStarted] = useState(false)
+  const [isWelcomeTransitioning, setIsWelcomeTransitioning] = useState(false)
+  const [logoTarget, setLogoTarget] = useState<{ left: number; top: number } | null>(null)
+  const logoAnchorRef = useRef<HTMLDivElement | null>(null)
+  const welcomeMoveTimeoutRef = useRef<number | null>(null)
+
+  const welcomeTransitionDurationMs = 700
+
+  useEffect(() => {
+    const updateLogoTarget = () => {
+      const rect = logoAnchorRef.current?.getBoundingClientRect()
+      if (!rect) {
+        return
+      }
+
+      setLogoTarget({
+        left: rect.left,
+        top: rect.top,
+      })
+    }
+
+    updateLogoTarget()
+    window.addEventListener('resize', updateLogoTarget)
+
+    return () => {
+      window.removeEventListener('resize', updateLogoTarget)
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (welcomeMoveTimeoutRef.current) {
+        window.clearTimeout(welcomeMoveTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     setCurrentSeekTime(0)
   }, [activeFile?.id])
+
+  const handleStart = () => {
+    setHasStarted(true)
+    setIsWelcomeTransitioning(true)
+
+    if (welcomeMoveTimeoutRef.current) {
+      window.clearTimeout(welcomeMoveTimeoutRef.current)
+    }
+
+    welcomeMoveTimeoutRef.current = window.setTimeout(() => {
+      setIsWelcomeTransitioning(false)
+    }, welcomeTransitionDurationMs)
+  }
 
   // Fetch files from backend on component mount
   useEffect(() => {
@@ -202,7 +317,9 @@ export default function App() {
     if (fileType === 'audio') return 'audio'
     return 'pdf'
   }
-
+////////////////////////////////////////////////////////////////////////////////////
+  
+////////////////////////////////////////////////////////////////////////////////////
   const handleDeleteFile = async (fileId: string) => {
     try {
       await apiClient.delete(`/api/files/${fileId}`)
@@ -246,32 +363,82 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex h-screen w-full text-white">
-      <div className="w-1/3 shrink-0">
-        <Sidebar
-          activeFileId={activeFile?.id ?? null}
-          tree={tree}
-          setTree={setTree}
-          onSelectFile={setActiveFile}
-          onOpenUpload={(targetFolderId?: string) => {
-            setUploadTargetFolderId(targetFolderId ?? null)
-            setIsUploadModalOpen(true)
-          }}
-          onDeleteFile={handleDeleteFile}
-          onRenameFile={handleRenameFile}
-          isLoadingFiles={isLoadingFiles}
-          uploadQueue={uploadQueue}
-        />
-      </div>
+    <div className="relative flex h-screen w-full text-white">
+      {!hasStarted || isWelcomeTransitioning ? (
+        <>
+          <div
+            className={`fixed inset-0 z-50 bg-zinc-950 transition-opacity duration-700 ease-in-out ${
+              hasStarted ? 'opacity-0' : 'opacity-100'
+            }`}
+          />
 
-      <div className="w-2/3 min-w-0">
-        <MainArea
-          activeFile={activeFile}
-          mode={mode}
-          onModeChange={setMode}
-          currentSeekTime={currentSeekTime}
-          onCitationClick={(start) => setCurrentSeekTime(start)}
-        />
+          <div
+            className={`fixed inset-0 z-60 flex items-center justify-center transition-opacity duration-700 ease-in-out ${
+              hasStarted ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+            <div className="mt-40 flex flex-col items-center text-center">
+              <ScrambleSubtitle />
+
+              <button
+                type="button"
+                onClick={handleStart}
+                className="relative rounded-xl bg-purple-600 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-purple-900/50 transition-all duration-300 hover:bg-purple-500 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-purple-500/60 active:translate-y-0"
+              >
+                Get Started
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`fixed z-50 select-none whitespace-nowrap font-bold tracking-tight text-white transition-[left,top,font-size,transform,opacity] duration-700 ease-in-out ${
+              hasStarted
+                ? 'text-2xl leading-none opacity-100'
+                : 'left-1/2 top-1/2 text-7xl leading-none opacity-100 md:text-8xl'
+            }`}
+            style={{
+              left: hasStarted && logoTarget ? `${logoTarget.left}px` : '50%',
+              top: hasStarted && logoTarget ? `${logoTarget.top}px` : '50%',
+              transform: hasStarted ? 'translate(0, 0)' : 'translate(-50%, -78%)',
+            }}
+          >
+            Sutr AI
+          </div>
+        </>
+      ) : null}
+
+      <div
+        className={`flex h-full w-full transition-opacity duration-700 ease-in-out ${
+          hasStarted && !isWelcomeTransitioning ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="w-1/3 shrink-0">
+          <Sidebar
+            activeFileId={activeFile?.id ?? null}
+            tree={tree}
+            setTree={setTree}
+            onSelectFile={setActiveFile}
+            onOpenUpload={(targetFolderId?: string) => {
+              setUploadTargetFolderId(targetFolderId ?? null)
+              setIsUploadModalOpen(true)
+            }}
+            onDeleteFile={handleDeleteFile}
+            onRenameFile={handleRenameFile}
+            isLoadingFiles={isLoadingFiles}
+            uploadQueue={uploadQueue}
+            logoAnchorRef={logoAnchorRef}
+          />
+        </div>
+
+        <div className="w-2/3 min-w-0">
+          <MainArea
+            activeFile={activeFile}
+            mode={mode}
+            onModeChange={setMode}
+            currentSeekTime={currentSeekTime}
+            onCitationClick={(start) => setCurrentSeekTime(start)}
+          />
+        </div>
       </div>
 
       <UploadModal
